@@ -44,7 +44,7 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       appBar: _selectedIndex == 0
           ? AppBar(
-        title: Text('Home'),
+        title: Text('Test'),
         actions: [
           IconButton(
             icon: Icon(Icons.account_circle),
