@@ -28,17 +28,8 @@ class _HomeScreenState extends State<HomeScreen> {
     "Fantasy",
     "Girls Love",
     "Horror",
-    "Isekai",
-    "Josei",
-    "Magic",
-    "Music",
-    "Psychological",
     "Romance",
-    "School",
     "Sci-Fi",
-    "Seinen",
-    "Shoujo",
-    "Shounen",
     "Slice of Life",
   ];
 
@@ -106,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center, // Center content horizontally
           children: [
-            Text('Extremely Experimental. Expect Lag.'),
+            Text('Extremely Experimental. Expect Lag And Long Waits.'),
             SizedBox(height: 20),
             Center( // Center the button
               child: ElevatedButton(
@@ -205,7 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      fetchRandomManga(); // Fetch a new manga with selected genres
                     },
                     child: Text("Apply Filter"),
                   ),
