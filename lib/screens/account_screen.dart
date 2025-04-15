@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_page.dart'; // Import the login page
-import 'home_screen.dart'; // Import the HomeScreen
 import 'main_screen.dart';
 
 class AccountScreen extends StatefulWidget {

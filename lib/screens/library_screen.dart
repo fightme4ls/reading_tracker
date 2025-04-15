@@ -314,6 +314,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
     TextEditingController titleController = TextEditingController(text: book.title);
     TextEditingController linkController = TextEditingController(text: book.linkURL);
+    TextEditingController imgController = TextEditingController(text: book.imageUrl);
 
     showDialog(
       context: context,
@@ -336,6 +337,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 controller: linkController,
                 decoration: InputDecoration(labelText: 'Link'),
               ),
+              TextField(
+                controller: imgController,
+                decoration: InputDecoration(labelText: 'Image Link'),
+              ),
             ],
           ),
           actions: [
@@ -351,6 +356,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 book.title = titleController.text;
                 book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
                 book.linkURL = linkController.text;
+                book.imageUrl = imgController.text;
 
                 // Save the updated book locally
                 await book.save();
@@ -363,6 +369,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   "title": book.title,
                   "chapter": book.chapter,
                   "linkURL": book.linkURL,
+                  "imageUrl" : book.imageUrl,
                 })
                     .then((_) {
                   print("Book updated in Firestore.");

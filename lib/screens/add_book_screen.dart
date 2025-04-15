@@ -18,12 +18,17 @@ class AddBookScreen extends StatefulWidget {
 class _AddBookScreenState extends State<AddBookScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController chapterController = TextEditingController();
+
   String selectedType = 'Novel';
   List<dynamic> searchResults = [];
   String? selectedImage;
   String? selectedTitle;
 
-  // Function to search manga using the Jikan API
+  bool _isManualEntry = false;
+
+  final String _placeholderImage =
+      'https://placehold.co/600x400/png/?text=Manual\nEntry&font=Oswald'; // Placeholder image URL
+
   Future<void> _searchManga(String query) async {
     if (query.isEmpty) {
       setState(() {
@@ -44,126 +49,111 @@ class _AddBookScreenState extends State<AddBookScreen> {
     }
   }
 
-  // Function to handle selection from search results
   void _onSelectManga(dynamic manga) {
     setState(() {
       selectedTitle = manga['title'];
       selectedImage = manga['images']['jpg']['image_url'];
       titleController.text = selectedTitle!;
-      searchResults = []; // Clear search results after selecting a manga
+      searchResults = [];
     });
   }
 
   void _addBook() async {
-    // Get the current user from FirebaseAuth
     User? user = FirebaseAuth.instance.currentUser;
-
-    // Check if the user is logged in
     if (user == null) {
-      // If the user is not logged in, show a message and return to prevent adding the book
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please log in to add a book!'),
-          duration: Duration(seconds: 2),
-        ),
+        SnackBar(content: Text('Please log in to add a book!'), duration: Duration(seconds: 2)),
       );
-      return; // Prevent further action if not logged in
+      return;
     }
 
-    // Continue adding the book if the user is logged in
     final title = titleController.text;
     final chapter = int.tryParse(chapterController.text) ?? 1;
+    final uid = user.uid;
 
     if (title.isNotEmpty) {
-      final user = FirebaseAuth.instance.currentUser;
-      final uid = user?.uid ?? '';
-
       final book = Book(
         title: title,
         type: selectedType,
         chapter: chapter,
-        imageUrl: selectedImage ?? '',
+        imageUrl: selectedImage ?? _placeholderImage,
         uid: uid,
       );
 
-      // Add the book to Hive
       final box = Hive.box<Book>('books');
       await box.add(book);
 
-      // Add the book to Firestore and get the document reference
-      FirebaseFirestore.instance.collection("books").add(
-        {
-          "title": title,
-          "type": selectedType,
-          "chapter": chapter,
-          "imageUrl": selectedImage ?? '',
-          "linkURL": '',
-          "uid": uid
-        },
-      ).then((docRef) {
-        // Once Firestore document is added, store the document ID in the Hive box
-        book.id = docRef.id; // Save the Firestore docRef ID into the book object
-        book.save(); // Save the updated book object with the id
-
+      FirebaseFirestore.instance.collection("books").add({
+        "title": title,
+        "type": selectedType,
+        "chapter": chapter,
+        "imageUrl": selectedImage ?? _placeholderImage,
+        "linkURL": '',
+        "uid": uid
+      }).then((docRef) {
+        book.id = docRef.id;
+        book.save();
         print("Book added with Firestore ID: ${docRef.id}");
       }).catchError((error) {
         print("Book not added to Firestore!");
         print(error.toString());
       });
 
-      widget.onBookAdded(); // Notify MainScreen to switch to Library
+      widget.onBookAdded();
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text("Add Book"),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _isManualEntry = !_isManualEntry;
+                searchResults = [];
+                selectedImage = null;
+              });
+            },
+            child: Text(
+              _isManualEntry ? "Use Search" : "Manual Entry",
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Title input with auto search
+            // Title input
             TextField(
               controller: titleController,
               decoration: InputDecoration(
                 labelText: 'Title',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(Icons.book),
               ),
               onChanged: (value) {
-                _searchManga(value);
-                if (value.isEmpty) {
-                  setState(() {
-                    selectedImage = null; // Clear image if search is empty
-                  });
-                }
-              },
-              onTap: () {
-                // Clear search results and image if the user taps again
-                if (titleController.text.isEmpty) {
-                  setState(() {
-                    selectedImage = null;
-                    searchResults = [];
-                  });
-                }
+                if (!_isManualEntry) _searchManga(value);
               },
             ),
-            // Search results display
-            if (searchResults.isNotEmpty)
+
+            // Search results (only if not manual mode)
+            if (!_isManualEntry && searchResults.isNotEmpty)
               Expanded(
                 child: ListView.builder(
                   itemCount: searchResults.length,
                   itemBuilder: (context, index) {
                     final manga = searchResults[index];
                     return ListTile(
-                      leading: manga['images']['jpg']['image_url'] != null
-                          ? Image.network(
+                      leading: Image.network(
                         manga['images']['jpg']['image_url'],
-                        width: 50, // Set the size of the image
+                        width: 50,
                         height: 50,
                         fit: BoxFit.cover,
-                      )
-                          : SizedBox.shrink(),
+                      ),
                       title: Text(manga['title']),
                       subtitle: Text(manga['type']),
                       onTap: () => _onSelectManga(manga),
@@ -171,13 +161,18 @@ class _AddBookScreenState extends State<AddBookScreen> {
                   },
                 ),
               ),
-            // Selected manga image display
-            if (selectedImage != null)
+
+            // Show selected image or placeholder
+            if (selectedImage != null || _isManualEntry)
               Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Image.network(selectedImage!),
+                child: Image.network(
+                  selectedImage ?? _placeholderImage,
+                  height: 150,
+                ),
               ),
-            // Dropdown for type
+
+            // Type dropdown
             DropdownButton<String>(
               value: selectedType,
               items: ['Novel', 'Manga', 'Manhwa', 'Light Novel'].map((type) {
@@ -185,12 +180,14 @@ class _AddBookScreenState extends State<AddBookScreen> {
               }).toList(),
               onChanged: (value) => setState(() => selectedType = value!),
             ),
+
             // Chapter input
             TextField(
               controller: chapterController,
               decoration: InputDecoration(labelText: 'Chapter'),
               keyboardType: TextInputType.number,
             ),
+
             SizedBox(height: 20),
             ElevatedButton(onPressed: _addBook, child: Text('Add')),
           ],
@@ -199,3 +196,4 @@ class _AddBookScreenState extends State<AddBookScreen> {
     );
   }
 }
+
