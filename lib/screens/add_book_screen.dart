@@ -107,7 +107,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Add Book"),
+        //title: Text("Add Book"),
         actions: [
           TextButton(
             onPressed: () {

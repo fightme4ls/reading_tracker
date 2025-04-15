@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -12,10 +11,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? randomMangaTitle;
   String? randomMangaImage;
   String? randomMangaSynopsis;
-  String? randomMangaUrl;
   List<String> randomMangaGenres = [];
   bool isSynopsisExpanded = false;
-  Set<String> selectedGenres = {}; // Store selected genres for filtering
+  Set<String> selectedGenres = {};
 
   final List<String> availableGenres = [
     "Action",
@@ -32,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
     "Slice of Life",
   ];
 
-// Fetch a random manga
   Future<void> fetchRandomManga() async {
     final url = Uri.parse('https://api.jikan.moe/v4/random/manga');
 
@@ -45,24 +42,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
         List<String> genres = List<String>.from(manga['genres'].map((genre) => genre['name']));
 
-        // Check if the manga contains the "Hentai" genre and retry if it does
         if (genres.contains("Hentai") || genres.contains("Erotica")) {
           print("Hentai/Erotica manga detected. Retrying...");
           fetchRandomManga();
           return;
         }
 
-        // Check if the manga matches selected genres
         if (selectedGenres.isEmpty || genres.any((g) => selectedGenres.contains(g))) {
           setState(() {
             randomMangaTitle = manga['title'];
             randomMangaImage = manga['images']['jpg']['image_url'];
             randomMangaSynopsis = manga['synopsis'];
-            randomMangaUrl = manga['url'];
             randomMangaGenres = genres;
           });
         } else {
-          // If the fetched manga doesn't match, fetch again
           print("Genres incorrect. Retrying...");
           fetchRandomManga();
         }
@@ -77,28 +70,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        // title: Text('Random Manga Picker'),
-        // actions: [
-        //   IconButton(
-        //     icon: Icon(Icons.account_circle),
-        //     onPressed: () {
-        //       Navigator.pushReplacement(
-        //         context,
-        //         MaterialPageRoute(builder: (context) => AccountScreen()),
-        //       );
-        //     },
-        //   ),
-        // ],
-      ),
+      appBar: AppBar(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(8.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center, // Center content horizontally
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text('Extremely Experimental. Expect Lag And Long Waits.'),
             SizedBox(height: 20),
-            Center( // Center the button
+            Center(
               child: ElevatedButton(
                 onPressed: fetchRandomManga,
                 child: Text('Pick a Random Manga'),
@@ -106,11 +86,11 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             SizedBox(height: 20),
             if (randomMangaTitle != null)
-              Center( // Center the card
+              Center(
                 child: Card(
                   elevation: 5,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center, // Center text inside the card
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       if (randomMangaImage != null && randomMangaImage!.isNotEmpty)
                         Image.network(randomMangaImage!, height: 150, fit: BoxFit.cover),
@@ -127,18 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.all(8.0),
                         child: _buildSynopsis(),
                       ),
-                      if (randomMangaUrl != null)
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: TextButton(
-                            onPressed: () {
-                              if (randomMangaUrl != null) {
-                                _launchURL(randomMangaUrl!);
-                              }
-                            },
-                            child: Text('Read more on MyAnimeList'),
-                          ),
-                        ),
+                      // Removed "Read more on MyAnimeList" button here
                     ],
                   ),
                 ),
@@ -146,7 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showGenreFilter(context),
         child: Icon(Icons.filter_list),
@@ -155,7 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Genre filtering modal
   void _showGenreFilter(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -184,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               } else {
                                 selectedGenres.remove(genre);
                               }
-                              print("Selected Genres: $selectedGenres"); // Debugging output
+                              print("Selected Genres: $selectedGenres");
                             });
                           });
                         },
@@ -207,7 +174,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Build genre chips
   Widget _buildGenres() {
     return Wrap(
       spacing: 8.0,
@@ -221,7 +187,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Build synopsis with expand/collapse
   Widget _buildSynopsis() {
     final synopsis = randomMangaSynopsis ?? 'No synopsis available';
     const int maxLength = 150;
@@ -248,14 +213,5 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
       ],
     );
-  }
-
-  // Open manga URL
-  void _launchURL(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
-    } else {
-      throw 'Could not launch $url';
-    }
   }
 }

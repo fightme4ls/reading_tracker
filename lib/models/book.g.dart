@@ -23,13 +23,14 @@ class BookAdapter extends TypeAdapter<Book> {
       imageUrl: fields[3] as String?,
       linkURL: fields[4] as String?,
       id: fields[5] as String?,
+      uid: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Book obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.title)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class BookAdapter extends TypeAdapter<Book> {
       ..writeByte(4)
       ..write(obj.linkURL)
       ..writeByte(5)
-      ..write(obj.id);
+      ..write(obj.id)
+      ..writeByte(6)
+      ..write(obj.uid);
   }
 
   @override
