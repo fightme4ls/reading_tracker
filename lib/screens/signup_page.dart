@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_page.dart';
+import 'main_screen.dart'; // Import MainScreen
 
 class SignUpPage extends StatefulWidget {
   @override
@@ -160,6 +161,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 padding: EdgeInsets.symmetric(vertical: 12, horizontal: 32),
                 textStyle: TextStyle(fontSize: 16),
                 backgroundColor: Colors.green,
+                foregroundColor: Colors.black,
               ),
             ),
             SizedBox(height: 16),
@@ -178,6 +180,23 @@ class _SignUpPageState extends State<SignUpPage> {
           ],
         ),
       ),
+
+      // Back to Home FAB
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Navigate back to the Home screen (MainScreen)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => MainScreen()), // Adjust to navigate to Home or MainScreen as needed
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        child: Icon(
+          Icons.home,
+          size: 30,
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

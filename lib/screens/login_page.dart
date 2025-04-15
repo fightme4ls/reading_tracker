@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'main_screen.dart'; // Import MainScreen
 import 'signup_page.dart'; // Import SignUpPage
 import 'forgotpassword_page.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -27,11 +28,35 @@ class _LoginPageState extends State<LoginPage> {
 
   // Check if email is verified and return a bool
   Future<bool> _checkEmailVerification(User user) async {
-    await user.reload(); // Reload user data to make sure we get the most updated information
-    if (!user.emailVerified) {
-      return false; // Email is not verified
+    await user.reload(); // Reload user data to get the most updated information
+    return user.emailVerified; // Return if email is verified
+  }
+
+  Future<void> _signInWithGoogle() async {
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return; // User canceled the sign-in
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      UserCredential userCredential =
+      await FirebaseAuth.instance.signInWithCredential(credential);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => MainScreen()),
+      );
+    } catch (error) {
+      print("Google Sign-In failed: $error");
+      setState(() {
+        _errorMessage = "Failed to sign in with Google.";
+      });
     }
-    return true; // Email is verified
   }
 
   @override
@@ -45,7 +70,6 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Display error message if there's any
             if (_errorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -55,7 +79,6 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
 
-            // Display info message if there's any (for email verification)
             if (_infoMessage != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -73,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
                   style: TextStyle(color: Colors.green, fontSize: 14),
                 ),
               ),
-            // Email input field
+
             TextField(
               controller: emailController,
               decoration: InputDecoration(
@@ -84,10 +107,9 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             SizedBox(height: 16),
-            // Password input field
             TextField(
               controller: passwordController,
-              obscureText: !_isPasswordVisible, // Toggle visibility
+              obscureText: !_isPasswordVisible,
               decoration: InputDecoration(
                 labelText: 'Password',
                 hintText: 'Enter your password',
@@ -106,13 +128,12 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             SizedBox(height: 24),
-            // Login button
             ElevatedButton(
               onPressed: () async {
                 String email = emailController.text;
                 String password = passwordController.text;
 
-                // First, check if the email format is valid
+                // Check if the email format is valid
                 if (!_isEmailValid(email)) {
                   setState(() {
                     _errorMessage = 'Please enter a valid email address.';
@@ -121,7 +142,7 @@ class _LoginPageState extends State<LoginPage> {
                 }
 
                 try {
-                  // try to sign in the user with email and password
+                  // Attempt to sign in the user with email and password
                   UserCredential userCredential =
                   await FirebaseAuth.instance.signInWithEmailAndPassword(
                     email: email,
@@ -130,18 +151,17 @@ class _LoginPageState extends State<LoginPage> {
 
                   User? user = userCredential.user;
                   if (user != null) {
-                    // check if the email is verified
+                    // Check if the email is verified
                     bool isVerified = await _checkEmailVerification(user);
                     if (isVerified) {
-                      // if email is verified, navigate to the main screen
+                      // If email is verified, navigate to the main screen
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (context) => MainScreen()),
                       );
                     } else {
-                      // if email is not verified, show info message
+                      // If email is not verified, show info message and log out
                       await user.sendEmailVerification();
-                      print("Attempting to send email");
                       setState(() {
                         _infoMessage = 'Please verify your email address before logging in.';
                         _infoMessage2 = 'Resending verification email.';
@@ -157,6 +177,7 @@ class _LoginPageState extends State<LoginPage> {
                   });
                   print("Failed to sign in!");
                   print(error.toString());
+                  FirebaseAuth.instance.signOut();
                 }
               },
               child: Text('Login'),
@@ -164,54 +185,74 @@ class _LoginPageState extends State<LoginPage> {
                 padding: EdgeInsets.symmetric(vertical: 12, horizontal: 32),
                 textStyle: TextStyle(fontSize: 16),
                 backgroundColor: Colors.blue,
+                foregroundColor: Colors.black,
               ),
             ),
-            SizedBox(height: 16),
-            // Sign Up button
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: TextButton(
-                onPressed: () {
-                  // Navigate to the SignUpPage
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => SignUpPage()),
-                  );
-                },
-                child: Text('Don\'t have an account? Sign Up'),
+            SizedBox(height: 36),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => SignUpPage()),
+                );
+              },
+              child: Text('Don\'t have an account? Sign Up'),
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 32),
+                textStyle: TextStyle(fontSize: 16),
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                side: BorderSide(color: Colors.grey),
               ),
             ),
-            // Add Forgot Password Button under the Sign Up button
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: TextButton(
-                onPressed: () {
-                  // Navigate to the ForgotPasswordPage
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => ForgotPasswordPage()),
-                  );
-                },
-                child: Text('Forgot Password?'),
+            SizedBox(height: 10),
+            ElevatedButton.icon(
+              onPressed: _signInWithGoogle,
+              icon: Image.asset(
+                'assets/google_logo.png',
+                height: 24,
+                width: 24,
+              ),
+              label: Text('Login with Google'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                side: BorderSide(color: Colors.grey),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                textStyle: TextStyle(fontSize: 16),
               ),
             ),
-            // Back to Home button (added below SignUp button)
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: TextButton(
-                onPressed: () {
-                  // Navigate back to the Home screen (MainScreen)
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => MainScreen()),
-                  );
-                },
-                child: Text('Back to Home'),
+            SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => ForgotPasswordPage()),
+                );
+              },
+              child: Text('Forgot Password?'),
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 32),
+                textStyle: TextStyle(fontSize: 16),
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                side: BorderSide(color: Colors.grey),
               ),
             ),
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => MainScreen()),
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        child: Icon(Icons.home, size: 30),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

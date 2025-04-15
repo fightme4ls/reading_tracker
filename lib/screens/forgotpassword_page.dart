@@ -83,6 +83,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 padding: EdgeInsets.symmetric(vertical: 12, horizontal: 32),
                 textStyle: TextStyle(fontSize: 16),
                 backgroundColor: Colors.blue,
+                foregroundColor: Colors.black,
               ),
             ),
             SizedBox(height: 16),
@@ -99,22 +100,26 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 child: Text('Back to Login'),
               ),
             ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: TextButton(
-                onPressed: () {
-                  // Navigate back to the Home screen (MainScreen)
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => MainScreen()),
-                  );
-                },
-                child: Text('Back to Home'),
-              ),
-            ),
           ],
         ),
       ),
+
+      // Back to Home FAB
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Navigate back to the Home screen (MainScreen)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => MainScreen()), // Adjust if you need to navigate somewhere else
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        child: Icon(
+          Icons.home,
+          size: 30,
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

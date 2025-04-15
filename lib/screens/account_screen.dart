@@ -123,7 +123,8 @@ class _AccountScreenState extends State<AccountScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 14, horizontal: 40),
-                    backgroundColor: Colors.teal.shade200,
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -161,8 +162,9 @@ class _AccountScreenState extends State<AccountScreen> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.black,
                     padding: EdgeInsets.symmetric(vertical: 14, horizontal: 40),
-                    backgroundColor: Colors.teal.shade200,
+                    backgroundColor: Colors.blueAccent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -204,6 +206,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 14, horizontal: 40),
                     backgroundColor: Colors.red.shade400,
+                    foregroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -227,10 +230,8 @@ class _AccountScreenState extends State<AccountScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     padding: EdgeInsets.symmetric(vertical: 14, horizontal: 40),
-                    backgroundColor: Colors.teal,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.black,
                   ),
                   child: Text(
                     'Login or Sign Up',
