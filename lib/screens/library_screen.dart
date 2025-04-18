@@ -32,7 +32,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Scaffold(
       appBar: _buildAppBar(),
       body: _buildBody(),
-      floatingActionButton: _isEditingMode ? _buildEditModeActions() : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _isEditingMode && _selectedBooks.isNotEmpty
+          ? FloatingActionButton.extended(
+        onPressed: _deleteSelectedBooks,
+        backgroundColor: Colors.red,
+        icon: Icon(Icons.delete),
+        label: Text('Delete'),
+        heroTag: 'delete',
+      )
+          : null,
     );
   }
 
@@ -344,25 +353,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  Widget _buildEditModeActions() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (_selectedBooks.isNotEmpty)
-            FloatingActionButton.extended(
-              onPressed: _deleteSelectedBooks,
-              backgroundColor: Colors.red,
-              icon: Icon(Icons.delete),
-              label: Text('Delete'),
-              heroTag: 'delete',
-            ),
-        ],
-      ),
-    );
-  }
-
   void _showEditDialog(Book book) {
     TextEditingController titleController = TextEditingController(text: book.title);
     TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
@@ -445,6 +435,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 book.imageUrl = imgController.text;
                 book.type = selectedType;
 
+                // Preserve the lastRead time
+                // This ensures we don't lose the timestamp when editing
+
                 await book.save();
                 _updateBookInFirestore(book);
 
@@ -470,6 +463,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
       "linkURL": book.linkURL ?? '',
       "imageUrl": book.imageUrl ?? '',
       "type": book.type,
+      // Always include lastRead when updating to Firestore
+      "lastRead": book.lastRead?.toIso8601String() ?? DateTime.now().toIso8601String(),
     })
         .then((_) {
       print("Book updated in Firestore.");
@@ -542,21 +537,55 @@ class _LibraryScreenState extends State<LibraryScreen> {
           .where('uid', isEqualTo: userId)
           .get();
 
-      await bookBox.clear();
+      // Don't clear the box as it could erase local books
+      // Instead, update existing books or add new ones
 
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        final book = Book(
-          id: doc.id,
-          title: data['title'] ?? 'Untitled',
-          type: data['type'] ?? 'Novel',
-          chapter: data['chapter'] ?? 1,
-          imageUrl: data['imageUrl'],
-          linkURL: data['linkURL'],
-          uid: data['uid'],
-        );
 
-        bookBox.add(book);
+        // Parse the lastRead timestamp from Firestore
+        DateTime? lastRead;
+        if (data['lastRead'] != null) {
+          try {
+            lastRead = DateTime.parse(data['lastRead']);
+          } catch (e) {
+            print("Error parsing lastRead date: $e");
+          }
+        }
+
+        // Check if book already exists in Hive
+        final existingBookIndex = bookBox.values.toList().indexWhere((b) => b.id == doc.id);
+
+        if (existingBookIndex != -1) {
+          // Book exists, update it
+          final existingBook = bookBox.getAt(existingBookIndex)!;
+          existingBook.title = data['title'] ?? existingBook.title;
+          existingBook.type = data['type'] ?? existingBook.type;
+          existingBook.chapter = data['chapter'] ?? existingBook.chapter;
+          existingBook.imageUrl = data['imageUrl'] ?? existingBook.imageUrl;
+          existingBook.linkURL = data['linkURL'] ?? existingBook.linkURL;
+          // Only update lastRead if the new value is more recent or existing is null
+          if (lastRead != null && (existingBook.lastRead == null ||
+              lastRead.isAfter(existingBook.lastRead!))) {
+            existingBook.lastRead = lastRead;
+          }
+
+          await existingBook.save();
+        } else {
+          // Book doesn't exist, add it
+          final book = Book(
+            id: doc.id,
+            title: data['title'] ?? 'Untitled',
+            type: data['type'] ?? 'Novel',
+            chapter: data['chapter'] ?? 1,
+            imageUrl: data['imageUrl'],
+            linkURL: data['linkURL'],
+            uid: data['uid'],
+            lastRead: lastRead,
+          );
+
+          await bookBox.add(book);
+        }
       }
 
       setState(() {});

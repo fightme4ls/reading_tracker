@@ -1,6 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:hive_flutter/hive_flutter.dart';
+import '../models/book.dart';
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -8,342 +11,262 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? randomMangaTitle;
-  String? randomMangaImage;
-  String? randomMangaSynopsis;
-  List<String> randomMangaGenres = [];
-  bool isSynopsisExpanded = false;
-  Set<String> selectedGenres = {};
-
-  final List<String> availableGenres = [
-    "Action",
-    "Adventure",
-    "Boys Love",
-    "Comedy",
-    "Drama",
-    "Ecchi",
-    "Fantasy",
-    "Girls Love",
-    "Horror",
-    "Romance",
-    "Sci-Fi",
-    "Slice of Life",
-  ];
-
-  Future<void> fetchRandomManga() async {
-    final url = Uri.parse('https://api.jikan.moe/v4/random/manga');
-
-    try {
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final manga = data['data'];
-
-        List<String> genres = List<String>.from(manga['genres'].map((genre) => genre['name']));
-
-        if (genres.contains("Hentai") || genres.contains("Erotica")) {
-          print("Hentai/Erotica manga detected. Retrying...");
-          fetchRandomManga();
-          return;
-        }
-
-        if (selectedGenres.isEmpty || genres.any((g) => selectedGenres.contains(g))) {
-          setState(() {
-            randomMangaTitle = manga['title'];
-            randomMangaImage = manga['images']['jpg']['image_url'];
-            randomMangaSynopsis = manga['synopsis'];
-            randomMangaGenres = genres;
-            isSynopsisExpanded = false;
-          });
-        } else {
-          print("Genres incorrect. Retrying...");
-          fetchRandomManga();
-        }
-      } else {
-        throw Exception('Failed to load random manga');
-      }
-    } catch (error) {
-      print('Error fetching random manga: $error');
-      // Optionally show an error message to the user
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load random manga.')),
-        );
-      }
-    }
-  }
+  late Box<Book> bookBox;
+  bool isLoading = true;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    fetchRandomManga(); // Fetch initial random manga when the screen loads
+    bookBox = Hive.box<Book>('books');
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (mounted) {
+      setState(() {
+        _currentUserId = user?.uid;
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _continueReading(Book book) async {
+    final now = DateTime.now();
+    book.lastRead = now;
+    await book.save();
+
+    if (book.id != null) {
+      FirebaseFirestore.instance.collection("books").doc(book.id).update({
+        "lastRead": now.toIso8601String(),
+      }).catchError((error) {
+        print("Error updating lastRead in Firestore: $error");
+        _showSnackbar('Failed to update read time remotely.');
+      });
+    }
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Explore Manga'),
+        title: Text('Recently Read'),
         centerTitle: true,
         foregroundColor: Colors.black,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _buildWarningText(),
-            SizedBox(height: 24),
-            _buildRandomButton(),
-            SizedBox(height: 24),
-            if (randomMangaTitle != null) _buildMangaCard(),
-            if (randomMangaTitle == null) _buildLoadingIndicator(), // Show loading indicator initially
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showGenreFilter(context),
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Icon(Icons.filter_list),
-        tooltip: 'Filter by Genre',
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-    );
-  }
+      body: ValueListenableBuilder<Box<Book>>(
+        valueListenable: bookBox.listenable(),
+        builder: (context, box, _) {
+          if (isLoading || _currentUserId == null) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-  Widget _buildLoadingIndicator() {
-    return CircularProgressIndicator(color: Colors.blueAccent);
-  }
+          final allBooks = box.values.where((book) => book.uid == _currentUserId).toList();
 
-  Widget _buildWarningText() {
-    return Container(
-      padding: EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade100,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Experimental feature. May experience lag and longer wait times.',
-              style: TextStyle(color: Colors.amber.shade900, fontSize: 16),
-            ),
-          ),
-        ],
+          // Sort books by lastRead date, most recent first
+          allBooks.sort((a, b) {
+            final aTime = a.lastRead ?? DateTime(1900);
+            final bTime = b.lastRead ?? DateTime(1900);
+            return bTime.compareTo(aTime);
+          });
+
+          final recentBooks = allBooks.take(10).toList();
+
+          if (recentBooks.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return _buildRecentBooksList(recentBooks);
+        },
       ),
     );
   }
 
-  Widget _buildRandomButton() {
-    return ElevatedButton.icon(
-      onPressed: fetchRandomManga,
-      icon: Icon(Icons.shuffle, color: Colors.white),
-      label: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-        child: Text('Pick a Random Manga', style: TextStyle(fontSize: 16, color: Colors.white)),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blueAccent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMangaCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (randomMangaImage != null && randomMangaImage!.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.network(
-                randomMangaImage!,
-                height: 220,
-                fit: BoxFit.contain, // Changed BoxFit.cover to BoxFit.contain
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: 220,
-                    color: Colors.grey.shade300,
-                    child: Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey.shade600)),
-                  );
-                },
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              randomMangaTitle ?? 'No Title',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: _buildGenres(),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: _buildSynopsis(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGenres() {
-    return Wrap(
-      spacing: 8.0,
-      runSpacing: 4.0,
-      alignment: WrapAlignment.center,
-      children: randomMangaGenres
-          .map((genre) => Chip(
-        label: Text(genre, style: TextStyle(color: Colors.blue.shade900)),
-        backgroundColor: Colors.blue.shade100,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ))
-          .toList(),
-    );
-  }
-
-  Widget _buildSynopsis() {
-    final synopsis = randomMangaSynopsis ?? 'No synopsis available';
-    const int maxLength = 150;
-
-    final truncatedSynopsis = synopsis.length > maxLength
-        ? synopsis.substring(0, maxLength) + '...'
-        : synopsis;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          isSynopsisExpanded ? synopsis : truncatedSynopsis,
-          style: TextStyle(fontSize: 16, color: Colors.black87),
-          textAlign: TextAlign.justify,
-        ),
-        if (synopsis.length > maxLength)
-          TextButton.icon(
-            onPressed: () {
-              setState(() {
-                isSynopsisExpanded = !isSynopsisExpanded;
-              });
-            },
-            icon: Icon(
-              isSynopsisExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-              color: Colors.blueAccent,
-            ),
-            label: Text(isSynopsisExpanded ? 'Show Less' : 'Show More', style: TextStyle(color: Colors.blueAccent)),
-          ),
-      ],
-    );
-  }
-
-  void _showGenreFilter(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Filter by Genres",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                  ),
-                  SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 8.0,
-                    children: availableGenres.map((genre) {
-                      final isSelected = selectedGenres.contains(genre);
-                      return ChoiceChip(
-                        label: Text(genre, style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black87,
-                        )),
-                        selected: isSelected,
-                        selectedColor: Colors.blueAccent,
-                        backgroundColor: Colors.grey.shade300,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        onSelected: (selected) {
-                          setModalState(() {
-                            setState(() {
-                              if (selected) {
-                                selectedGenres.add(genre);
-                              } else {
-                                selectedGenres.remove(genre);
-                              }
-                            });
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedGenres.clear();
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: Text("Clear All", style: TextStyle(fontSize: 16, color: Colors.grey.shade700)),
-                      ),
-                      SizedBox(width: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          fetchRandomManga(); // Re-fetch with applied filters
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          textStyle: TextStyle(fontSize: 16),
-                        ),
-                        child: Text("Apply Filter"),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                ],
-              ),
-            );
-          },
-        );
+  Widget _buildRecentBooksList(List<Book> books) {
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: books.length,
+      itemBuilder: (context, index) {
+        final book = books[index];
+        return _buildBookCard(book);
       },
     );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.menu_book, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            "No recently read books",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Books you read will appear here",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookCard(Book book) {
+    String lastReadText = 'Never read';
+    if (book.lastRead != null) {
+      final now = DateTime.now();
+      final difference = now.difference(book.lastRead!);
+
+      if (difference.inMinutes < 1) {
+        lastReadText = 'Just now';
+      } else if (difference.inHours < 1) {
+        lastReadText = '${difference.inMinutes} min ago';
+      } else if (difference.inDays < 1) {
+        lastReadText = '${difference.inHours} hours ago';
+      } else if (difference.inDays < 7) {
+        lastReadText = '${difference.inDays} days ago';
+      } else {
+        lastReadText = DateFormat('MMM d, y').format(book.lastRead!);
+      }
+    }
+
+    return Card(
+      elevation: 2,
+      margin: EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: () => _continueReading(book),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: book.imageUrl != null && book.imageUrl!.isNotEmpty
+                    ? Image.network(
+                  book.imageUrl!,
+                  width: 80,
+                  height: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 80,
+                      height: 120,
+                      color: Colors.grey.shade300,
+                      child: Icon(Icons.broken_image, size: 40),
+                    );
+                  },
+                )
+                    : Container(
+                  width: 80,
+                  height: 120,
+                  color: _getTypeColor(book.type).withOpacity(0.2),
+                  child: Icon(Icons.book, size: 40, color: _getTypeColor(book.type)),
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book.title,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _getTypeColor(book.type).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            book.type,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _getTypeColor(book.type),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.bookmark_border, size: 16, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(
+                          'Ch. ${book.chapter}',
+                          style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(
+                          lastReadText,
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => _continueReading(book),
+                          icon: Icon(Icons.play_arrow, size: 16),
+                          label: Text('Continue'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            minimumSize: Size(100, 32),
+                            textStyle: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getTypeColor(String type) {
+    switch (type) {
+      case 'Novel':
+        return Colors.blue;
+      case 'Manga':
+        return Colors.red;
+      case 'Manhwa':
+        return Colors.purple;
+      case 'Light Novel':
+        return Colors.amber.shade800;
+      default:
+        return Colors.grey;
+    }
   }
 }

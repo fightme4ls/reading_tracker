@@ -19,6 +19,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController chapterController = TextEditingController();
   final TextEditingController imageUrlController = TextEditingController();
+  final TextEditingController linkUrlController = TextEditingController(); // Added for link URL
 
   String selectedType = 'Novel';
   List<dynamic> searchResults = [];
@@ -41,6 +42,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
     titleController.dispose();
     chapterController.dispose();
     imageUrlController.dispose();
+    linkUrlController.dispose(); // Added to dispose the new controller
     super.dispose();
   }
 
@@ -58,6 +60,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
                 selectedImage = null;
                 if (!_isManualEntry) {
                   imageUrlController.clear();
+                  linkUrlController.clear(); // Clear link URL when switching modes
                 }
               });
             },
@@ -96,6 +99,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
         _buildTypeDropdown(),
         SizedBox(height: 20),
         _buildChapterField(),
+        SizedBox(height: 20),
+        _buildLinkUrlField(), // Added link URL field
         if (_isManualEntry) ...[
           SizedBox(height: 20),
           _buildImageUrlField(),
@@ -122,6 +127,20 @@ class _AddBookScreenState extends State<AddBookScreen> {
           _searchManga(value); // Trigger search on every text change
         }
       },
+    );
+  }
+
+  Widget _buildLinkUrlField() {
+    return TextField(
+      controller: linkUrlController,
+      decoration: InputDecoration(
+        labelText: 'Reading Link (optional)',
+        hintText: 'Enter URL to continue reading',
+        prefixIcon: Icon(Icons.link),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
   }
 
@@ -377,13 +396,19 @@ class _AddBookScreenState extends State<AddBookScreen> {
       final chapter = int.tryParse(chapterController.text) ?? 1;
       final uid = user.uid;
       final imageUrl = selectedImage ?? _placeholderImage;
+      final linkURL = linkUrlController.text.trim();
+
+      // Create current timestamp for lastRead
+      final now = DateTime.now();
 
       final book = Book(
         title: title,
         type: selectedType,
         chapter: chapter,
         imageUrl: imageUrl,
+        linkURL: linkURL.isNotEmpty ? linkURL : null,
         uid: uid,
+        lastRead: now, // Set lastRead to current time
       );
 
       final box = Hive.box<Book>('books');
@@ -394,8 +419,9 @@ class _AddBookScreenState extends State<AddBookScreen> {
         "type": selectedType,
         "chapter": chapter,
         "imageUrl": imageUrl,
-        "linkURL": '',
-        "uid": uid
+        "linkURL": linkURL,
+        "uid": uid,
+        "lastRead": now.toIso8601String(), // Store as ISO string in Firestore
       });
 
       book.id = docRef.id;
@@ -423,6 +449,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   void _resetForm() {
     titleController.clear();
     chapterController.text = '1';
+    linkUrlController.clear();
     setState(() {
       selectedImage = null;
       selectedTitle = null;

@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.reading_tracker">
+    package="edu.cpp.reading_tracker">
 
     <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -9,7 +9,7 @@
     <application
         android:label="reading_tracker"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
 
         <!-- Main Activity -->
         <activity

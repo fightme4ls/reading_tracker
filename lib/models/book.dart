@@ -25,5 +25,17 @@ class Book extends HiveObject {
   @HiveField(6)
   String? uid; // UID of the user who added the book (for linking to specific user)
 
-  Book({required this.title, required this.type, required this.chapter, this.imageUrl, this.linkURL, this.id, this.uid});
+  @HiveField(7)
+  DateTime? lastRead; // Timestamp of when the book was last read
+
+  Book({
+    required this.title,
+    required this.type,
+    required this.chapter,
+    this.imageUrl,
+    this.linkURL,
+    this.id,
+    this.uid,
+    this.lastRead,
+  });
 }

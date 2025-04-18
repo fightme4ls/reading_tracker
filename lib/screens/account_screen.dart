@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:hive/hive.dart';
+import '../models/book.dart';
 import 'login_page.dart';
 import 'main_screen.dart';
 import 'package:http/http.dart' as http;
@@ -40,36 +42,24 @@ class _AccountScreenState extends State<AccountScreen> {
   void _onImportTextChanged() {
     final String currentText = _importController.text;
     String transformedText = currentText.toLowerCase().trim().split('\n').map((line) {
-
-      // Check if line contains 'finished chapter' and transform accordingly
       if (line.contains('finished chapter')) {
         return line.replaceAll(' finished chapter ', ' ').replaceAll(' finished chapter', '').trim();
-
-        // Check if line contains 'chapter' before a number and 'finished' after it
       } else if (line.contains('chapter') && line.contains('finished')) {
         final regExp = RegExp(r'(chapter\s*\d+)\s*finished');
         if (regExp.hasMatch(line)) {
           return line.replaceAllMapped(regExp, (match) {
-            // Only return the chapter number, removing 'chapter' and 'finished'
             return match.group(1)!.replaceAll('chapter', '').trim();
           }).trim();
         }
-
-        // Check for 'finished' without 'chapter' and handle it
       } else if (line.contains('finished')) {
         return line.replaceAll(' finished ', ' 0 ').replaceAll(' finished', ' 0').trim();
-
-        // Check for 'not started' and handle it
       } else if (line.contains('not started')) {
         return line.replaceAll(' not started ', ' 0 ').replaceAll(' not started', ' 0').trim();
-
       } else {
         return line.trim();
       }
-
     }).join('\n');
 
-    // Update the controller if there's any change in text
     if (transformedText != currentText) {
       _importController.value = TextEditingValue(
         text: transformedText,
@@ -81,6 +71,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> _deleteUserAccount() async {
     try {
       String uid = currentUser?.uid ?? '';
+
       await FirebaseFirestore.instance
           .collection('books')
           .where('uid', isEqualTo: uid)
@@ -90,10 +81,15 @@ class _AccountScreenState extends State<AccountScreen> {
           doc.reference.delete();
         }
       }).catchError((error) {
-        print("Error deleting books: $error");
-        _showErrorSnackbar('Failed to delete associated books.');
+        print("Error deleting books from Firestore: $error");
+        _showErrorSnackbar('Failed to delete associated books from Firestore.');
         return;
       });
+
+      final bookBox = Hive.box<Book>('books');
+      final keysToDelete = bookBox.keys.cast<int>().where((key) => bookBox.get(key)?.uid == uid).toList();
+      await bookBox.deleteAll(keysToDelete);
+      print("Deleted ${keysToDelete.length} books from local storage.");
 
       await FirebaseFirestore.instance
           .collection('users')
@@ -135,7 +131,6 @@ class _AccountScreenState extends State<AccountScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['data'] != null && data['data'].isNotEmpty) {
-          // Pull the title from the API response
           String apiTitle = data['data'][0]['title'] ?? '';
           return {'title': apiTitle, ...data['data'][0]};
         }
@@ -155,6 +150,7 @@ class _AccountScreenState extends State<AccountScreen> {
     List<String> lines = bookList.trim().split('\n');
     int importedCount = 0;
     List<String> failedImports = [];
+    final bookBox = Hive.box<Book>('books');
 
     for (String line in lines) {
       try {
@@ -178,10 +174,8 @@ class _AccountScreenState extends State<AccountScreen> {
         }
 
         if (title.isNotEmpty) {
-          // Fetch the title from the API, this now returns the actual title from the API response
           Map<String, dynamic> searchResult = await _searchBook(title);
-          String apiTitle = searchResult['title'] ?? title; // Fallback to local title if API doesn't return one
-
+          String apiTitle = searchResult['title'] ?? title;
           String imageUrl = "https://placehold.co/600x400/png/?text=Manual\\nEntry&font=Oswald";
           String type = "Novel";
 
@@ -192,14 +186,29 @@ class _AccountScreenState extends State<AccountScreen> {
             type = searchResult['type'];
           }
 
-          await FirebaseFirestore.instance.collection("books").add({
+          final now = DateTime.now();
+
+          final docRef = await FirebaseFirestore.instance.collection("books").add({
             "uid": currentUser!.uid,
-            "title": apiTitle,  // Use the title from the API or fallback to local title
+            "title": apiTitle,
             "chapter": chapter,
             "type": type,
             "imageUrl": imageUrl,
             "linkURL": "",
+            "lastRead": now.toIso8601String(),
           });
+
+          final newBook = Book(
+            title: apiTitle,
+            type: type,
+            chapter: chapter,
+            imageUrl: imageUrl,
+            linkURL: "",
+            uid: currentUser!.uid,
+            lastRead: now,
+            id: docRef.id,
+          );
+          await bookBox.add(newBook);
 
           importedCount++;
         } else {
@@ -220,7 +229,6 @@ class _AccountScreenState extends State<AccountScreen> {
       SnackBar(content: Text(message)),
     );
   }
-
 
   void _showImportDialog(BuildContext context) {
     showDialog(
@@ -301,7 +309,7 @@ class _AccountScreenState extends State<AccountScreen> {
                 SizedBox(height: 16),
                 _buildListBooksButton(),
                 SizedBox(height: 16),
-                _buildImportBooksButton(), // Added import books button
+                _buildImportBooksButton(),
                 SizedBox(height: 16),
                 _buildDeleteAccountButton(),
                 SizedBox(height: 32),
@@ -319,7 +327,6 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // Button to import books
   Widget _buildImportBooksButton() {
     return ElevatedButton.icon(
       onPressed: () {
@@ -344,7 +351,6 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // Button to show user info
   Widget _buildUserInfoButton() {
     return ElevatedButton.icon(
       onPressed: () {
@@ -391,7 +397,6 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // Button to list books
   Widget _buildListBooksButton() {
     return ElevatedButton.icon(
       onPressed: () {
@@ -405,7 +410,12 @@ class _AccountScreenState extends State<AccountScreen> {
             if (querySnapshot.docs.isNotEmpty) {
               String bookList = 'Your Books:\n';
               querySnapshot.docs.forEach((element) {
-                bookList += '- ${element.data()['title']} (Chapter ${element.data()['chapter']})\n';
+                final data = element.data();
+                final lastReadTimestamp = data['lastRead'];
+                String lastReadFormatted = lastReadTimestamp != null
+                    ? ' (Last Read: ${DateTime.parse(lastReadTimestamp).toLocal().toString().split('.').first})'
+                    : '';
+                bookList += '- ${data['title']} (Chapter ${data['chapter']})$lastReadFormatted\n';
               });
 
               showDialog(
@@ -453,58 +463,56 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // Button to delete user account
   Widget _buildDeleteAccountButton() {
     return ElevatedButton.icon(
-      onPressed: () {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('Delete Account', style: TextStyle(color: Colors.red.shade400)),
-              content: Text(
-                'Are you sure you want to delete your account and all associated data? This action is permanent.',
-                style: TextStyle(fontSize: 16),
+        onPressed: () {
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: Text('Delete Account', style: TextStyle(color: Colors.red.shade400)),
+            content: Text(
+              'Are you sure you want to delete your account and all associated data? This action is permanent.',
+              style: TextStyle(fontSize: 16),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: Text('Cancel', style: TextStyle(fontSize: 16)),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  child: Text('Cancel', style: TextStyle(fontSize: 16)),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _deleteUserAccount();
-                  },
-                  child: Text('Delete', style: TextStyle(color: Colors.red.shade400, fontSize: 16)),
-                ),
-              ],
-            );
-          },
-        );
-      },
-      icon: Icon(Icons.delete_forever, color: Colors.white),
-      label: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Text(
-          'Delete Account',
-          style: TextStyle(fontSize: 16, color: Colors.white),
-        ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.red.shade400,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-      ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _deleteUserAccount();
+                },
+                child: Text('Delete', style: TextStyle(color: Colors.red.shade400, fontSize: 16)),
+              ),
+            ],
+          );
+        },
+      );
+    },
+    icon: Icon(Icons.delete_forever, color: Colors.white),
+    label: Padding(
+    padding: const EdgeInsets.all(12.0),
+    child: Text(
+    'Delete Account',
+    style: TextStyle(fontSize: 16, color: Colors.white),
+    ),
+    ),
+    style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red.shade400,
+    foregroundColor: Colors.white,
+    shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(12),
+    ),
+    padding: EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+    ),
     );
   }
 
-  // Button to login or sign up if no user is logged in
   Widget _buildLoginButton() {
     return ElevatedButton.icon(
       onPressed: () {
@@ -532,7 +540,6 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // Home button in the bottom left corner
   Widget _buildHomeButton() {
     return FloatingActionButton(
       onPressed: () {
