@@ -13,7 +13,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Box<Book> bookBox;
   bool isLoading = true;
-  String? _currentUserId;
+  User? _currentUser;
 
   @override
   void initState() {
@@ -23,13 +23,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadCurrentUser() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (mounted) {
-      setState(() {
-        _currentUserId = user?.uid;
-        isLoading = false;
-      });
-    }
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (mounted) {
+        setState(() {
+          _currentUser = user;
+          isLoading = false;
+        });
+      }
+    });
   }
 
   Future<void> _continueReading(Book book) async {
@@ -37,7 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
     book.lastRead = now;
     await book.save();
 
-    if (book.id != null) {
+    if (book.id != null && _currentUser != null) {
       FirebaseFirestore.instance.collection("books").doc(book.id).update({
         "lastRead": now.toIso8601String(),
       }).catchError((error) {
@@ -65,11 +66,15 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ValueListenableBuilder<Box<Book>>(
         valueListenable: bookBox.listenable(),
         builder: (context, box, _) {
-          if (isLoading || _currentUserId == null) {
+          if (isLoading) {
             return Center(child: CircularProgressIndicator());
           }
 
-          final allBooks = box.values.where((book) => book.uid == _currentUserId).toList();
+          if (_currentUser == null) {
+            return _buildNotLoggedIn();
+          }
+
+          final allBooks = box.values.where((book) => book.uid == _currentUser!.uid).toList();
 
           // Sort books by lastRead date, most recent first
           allBooks.sort((a, b) {
@@ -81,11 +86,50 @@ class _HomeScreenState extends State<HomeScreen> {
           final recentBooks = allBooks.take(10).toList();
 
           if (recentBooks.isEmpty) {
-            return _buildEmptyState();
+            return _buildNoBooksAdded();
           }
 
           return _buildRecentBooksList(recentBooks);
         },
+      ),
+    );
+  }
+
+  Widget _buildNotLoggedIn() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.person_outline, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            "Please log in to view your recently read.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoBooksAdded() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.library_add_outlined, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            "Add some books!",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          SizedBox(height: 8),
+          Text(
+            "Once you add books, your recently read will appear here.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
       ),
     );
   }
@@ -98,27 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
         final book = books[index];
         return _buildBookCard(book);
       },
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.menu_book, size: 80, color: Colors.grey),
-          SizedBox(height: 16),
-          Text(
-            "No recently read books",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-          ),
-          SizedBox(height: 8),
-          Text(
-            "Books you read will appear here",
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
-      ),
     );
   }
 
