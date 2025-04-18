@@ -77,7 +77,7 @@ class _MainScreenState extends State<MainScreen> {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.grey.withValues(),
             blurRadius: 8,
             offset: Offset(0, -2),
           ),
