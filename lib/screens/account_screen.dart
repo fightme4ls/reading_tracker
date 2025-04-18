@@ -351,7 +351,7 @@ class _AccountScreenState extends State<AccountScreen> {
         User? user = FirebaseAuth.instance.currentUser;
         String uid = user?.uid ?? '';
         String message = user != null
-            ? 'Logged in as: ${user.email}\nUID: $uid'
+            ? 'Logged in as: ${user.email}'
             : 'Please log in to see your information.';
 
         showDialog(

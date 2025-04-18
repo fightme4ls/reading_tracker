@@ -18,106 +18,125 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Forgot Password'),
+        centerTitle: true,
+        backgroundColor: Colors.blueAccent,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Display error message if there's any
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: Colors.red, fontSize: 14),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Display error message if there's any
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red.shade400, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              // Display info message if there's any
+              if (_infoMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _infoMessage!,
+                    style: TextStyle(color: Colors.green, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              SizedBox(height: 20),
+              // Email input field
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  hintText: 'Enter your email to reset your password',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: Icon(Icons.email, color: Colors.blueAccent),
                 ),
               ),
-            // Display info message if there's any
-            if (_infoMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  _infoMessage!,
-                  style: TextStyle(color: Colors.green, fontSize: 14),
+              SizedBox(height: 24),
+              // Reset Password button
+              ElevatedButton(
+                onPressed: () async {
+                  String email = emailController.text.trim();
+
+                  if (email.isEmpty) {
+                    setState(() {
+                      _errorMessage = 'Please enter your email address.';
+                    });
+                    return;
+                  }
+
+                  // Send password reset email using Firebase Authentication
+                  try {
+                    await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                    setState(() {
+                      _infoMessage = 'A password reset link has been sent to your email address.';
+                      _errorMessage = null;
+                    });
+                  } on FirebaseAuthException catch (error) {
+                    setState(() {
+                      _errorMessage = 'Error: ${error.message}';
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  textStyle: TextStyle(fontSize: 16),
                 ),
+                child: Text('Send Password Reset Link'),
               ),
-            // Email input field
-            TextField(
-              controller: emailController,
-              decoration: InputDecoration(
-                labelText: 'Enter your email',
-                hintText: 'Enter your email to reset password',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.email),
-              ),
-            ),
-            SizedBox(height: 24),
-            // Reset Password button
-            ElevatedButton(
-              onPressed: () async {
-                String email = emailController.text;
-
-                if (email.isEmpty) {
-                  setState(() {
-                    _errorMessage = 'Please enter your email address.';
-                  });
-                  return;
-                }
-
-                // Send password reset email using Firebase Authentication
-                try {
-                  await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-                  setState(() {
-                    _infoMessage = 'Password reset email has been sent.';
-                    _errorMessage = null;
-                  });
-                } on FirebaseAuthException catch (error) {
-                  setState(() {
-                    _errorMessage = 'Error: ${error.message}';
-                  });
-                }
-              },
-              child: Text('Send Reset Link'),
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 32),
-                textStyle: TextStyle(fontSize: 16),
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.black,
-              ),
-            ),
-            SizedBox(height: 16),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: TextButton(
+              SizedBox(height: 16),
+              TextButton(
                 onPressed: () {
-                  // Navigate back to the Home screen (MainScreen)
+                  // Navigate back to the Login screen
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (context) => LoginPage()),
                   );
                 },
-                child: Text('Back to Login'),
+                child: Text(
+                  'Back to Login',
+                  style: TextStyle(fontSize: 16, color: Colors.blueAccent),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-
       // Back to Home FAB
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Navigate back to the Home screen (MainScreen)
+          // Navigate back to the Main screen
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => MainScreen()), // Adjust if you need to navigate somewhere else
+            MaterialPageRoute(builder: (context) => MainScreen()),
           );
         },
         backgroundColor: Colors.blueAccent,
         child: Icon(
           Icons.home,
           size: 30,
+          color: Colors.white,
         ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );

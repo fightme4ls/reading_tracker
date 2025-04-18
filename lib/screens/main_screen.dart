@@ -51,14 +51,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   AppBar _buildAppBar() {
-    final titles = ['Home', 'Library', 'Add Book'];
-
     return AppBar(
-      title: Text(titles[_selectedIndex]),
+      title: null, // Set title to null to remove the dynamic title
       centerTitle: true,
       elevation: 2,
       actions: [
-        if (_selectedIndex == 0)  // Only show account button on Home screen
+        if (_selectedIndex == 0) // Only show account button on Home screen
           IconButton(
             icon: Icon(Icons.account_circle),
             onPressed: () {
@@ -69,6 +67,7 @@ class _MainScreenState extends State<MainScreen> {
             },
             tooltip: 'Account',
           ),
+        SizedBox(width: 8), // Add some spacing to the right
       ],
     );
   }

@@ -65,15 +65,34 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (error) {
       print('Error fetching random manga: $error');
+      // Optionally show an error message to the user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load random manga.')),
+        );
+      }
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    fetchRandomManga(); // Fetch initial random manga when the screen loads
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        title: Text('Explore Manga'),
+        centerTitle: true,
+        foregroundColor: Colors.black,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+        ),
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -82,32 +101,41 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildRandomButton(),
             SizedBox(height: 24),
             if (randomMangaTitle != null) _buildMangaCard(),
+            if (randomMangaTitle == null) _buildLoadingIndicator(), // Show loading indicator initially
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showGenreFilter(context),
+        backgroundColor: Colors.blueAccent,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Icon(Icons.filter_list),
         tooltip: 'Filter by Genre',
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return CircularProgressIndicator(color: Colors.blueAccent);
   }
 
   Widget _buildWarningText() {
     return Container(
-      padding: EdgeInsets.all(8),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.amber.shade100,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.amber.shade900),
-          SizedBox(width: 8),
+          Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               'Experimental feature. May experience lag and longer wait times.',
-              style: TextStyle(color: Colors.amber.shade900),
+              style: TextStyle(color: Colors.amber.shade900, fontSize: 16),
             ),
           ),
         ],
@@ -118,12 +146,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildRandomButton() {
     return ElevatedButton.icon(
       onPressed: fetchRandomManga,
-      icon: Icon(Icons.shuffle),
+      icon: Icon(Icons.shuffle, color: Colors.white),
       label: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text('Pick a Random Manga', style: TextStyle(fontSize: 16)),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        child: Text('Pick a Random Manga', style: TextStyle(fontSize: 16, color: Colors.white)),
       ),
       style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blueAccent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -138,28 +167,34 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (randomMangaImage != null && randomMangaImage!.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
               child: Image.network(
                 randomMangaImage!,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
+                height: 220,
+                fit: BoxFit.contain, // Changed BoxFit.cover to BoxFit.contain
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 220,
+                    color: Colors.grey.shade300,
+                    child: Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey.shade600)),
+                  );
+                },
               ),
             ),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
               randomMangaTitle ?? 'No Title',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: _buildGenres(),
           ),
           Padding(
@@ -178,9 +213,11 @@ class _HomeScreenState extends State<HomeScreen> {
       alignment: WrapAlignment.center,
       children: randomMangaGenres
           .map((genre) => Chip(
-        label: Text(genre),
+        label: Text(genre, style: TextStyle(color: Colors.blue.shade900)),
         backgroundColor: Colors.blue.shade100,
-        labelStyle: TextStyle(color: Colors.blue.shade900),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ))
           .toList(),
     );
@@ -199,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           isSynopsisExpanded ? synopsis : truncatedSynopsis,
-          style: TextStyle(fontSize: 16),
+          style: TextStyle(fontSize: 16, color: Colors.black87),
           textAlign: TextAlign.justify,
         ),
         if (synopsis.length > maxLength)
@@ -211,8 +248,9 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             icon: Icon(
               isSynopsisExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              color: Colors.blueAccent,
             ),
-            label: Text(isSynopsisExpanded ? 'Show Less' : 'Show More'),
+            label: Text(isSynopsisExpanded ? 'Show Less' : 'Show More', style: TextStyle(color: Colors.blueAccent)),
           ),
       ],
     );
@@ -231,10 +269,11 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     "Filter by Genres",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                   ),
                   SizedBox(height: 16),
                   Wrap(
@@ -243,11 +282,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: availableGenres.map((genre) {
                       final isSelected = selectedGenres.contains(genre);
                       return ChoiceChip(
-                        label: Text(genre),
+                        label: Text(genre, style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                        )),
                         selected: isSelected,
-                        selectedColor: Colors.blue.shade100,
-                        labelStyle: TextStyle(
-                          color: isSelected ? Colors.blue.shade900 : Colors.black87,
+                        selectedColor: Colors.blueAccent,
+                        backgroundColor: Colors.grey.shade300,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         onSelected: (selected) {
                           setModalState(() {
@@ -265,21 +307,32 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   SizedBox(height: 20),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      OutlinedButton(
+                      TextButton(
                         onPressed: () {
                           setState(() {
                             selectedGenres.clear();
                           });
                           Navigator.pop(context);
                         },
-                        child: Text("Clear All"),
+                        child: Text("Clear All", style: TextStyle(fontSize: 16, color: Colors.grey.shade700)),
                       ),
+                      SizedBox(width: 16),
                       ElevatedButton(
                         onPressed: () {
+                          fetchRandomManga(); // Re-fetch with applied filters
                           Navigator.pop(context);
                         },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          textStyle: TextStyle(fontSize: 16),
+                        ),
                         child: Text("Apply Filter"),
                       ),
                     ],
