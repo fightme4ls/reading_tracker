@@ -140,18 +140,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildBookGrid(Box<Book> box) {
-    // Get the current logged-in user UID
     final user = FirebaseAuth.instance.currentUser;
     final userId = user?.uid ?? '';
 
-    // Filter books based on search query and user's UID
     final books = box.values
         .where((book) =>
     book.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
         book.uid == userId)
         .toList();
 
-    // Sort books based on selected sort option
     if (_sortOption == 'Title') {
       books.sort((a, b) => a.title.compareTo(b.title));
     } else if (_sortOption == 'Chapter') {
@@ -243,7 +240,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Book cover image
                   ClipRRect(
                     borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                     child: book.imageUrl != null && book.imageUrl!.isNotEmpty
@@ -262,7 +258,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       child: Icon(Icons.book, size: 50),
                     ),
                   ),
-                  // Selection indicator
                   if (isSelected)
                     Positioned(
                       top: 8,
@@ -283,7 +278,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ],
               ),
             ),
-            // Book info
             Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -374,6 +368,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
     TextEditingController linkController = TextEditingController(text: book.linkURL ?? '');
     TextEditingController imgController = TextEditingController(text: book.imageUrl ?? '');
+    String selectedType = book.type;
 
     showDialog(
       context: context,
@@ -416,6 +411,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     prefixIcon: Icon(Icons.image),
                   ),
                 ),
+                SizedBox(height: 16),
+                DropdownButton<String>(
+                  value: selectedType,
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      selectedType = newValue!;
+                    });
+                  },
+                  items: <String>['Novel', 'Manga', 'Manhwa', 'Light Novel']
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                ),
               ],
             ),
           ),
@@ -428,16 +439,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                // Update the local Hive data
                 book.title = titleController.text;
                 book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
                 book.linkURL = linkController.text;
                 book.imageUrl = imgController.text;
+                book.type = selectedType;
 
-                // Save the updated book locally
                 await book.save();
-
-                // Update the book in Firestore
                 _updateBookInFirestore(book);
 
                 Navigator.pop(context);
@@ -461,6 +469,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       "chapter": book.chapter,
       "linkURL": book.linkURL ?? '',
       "imageUrl": book.imageUrl ?? '',
+      "type": book.type,
     })
         .then((_) {
       print("Book updated in Firestore.");
@@ -533,10 +542,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
           .where('uid', isEqualTo: userId)
           .get();
 
-      // Clear existing Hive data to prevent duplicates
       await bookBox.clear();
 
-      // Add books from Firestore to Hive
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final book = Book(
