@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'login_page.dart'; // Import the login page
+import 'login_page.dart';
 import 'main_screen.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class AccountScreen extends StatefulWidget {
   @override
@@ -11,10 +13,12 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   User? currentUser = FirebaseAuth.instance.currentUser;
+  final TextEditingController _importController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (mounted) {
         setState(() {
@@ -22,12 +26,61 @@ class _AccountScreenState extends State<AccountScreen> {
         });
       }
     });
+
+    _importController.addListener(_onImportTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _importController.removeListener(_onImportTextChanged);
+    _importController.dispose();
+    super.dispose();
+  }
+
+  void _onImportTextChanged() {
+    final String currentText = _importController.text;
+    String transformedText = currentText.toLowerCase().trim().split('\n').map((line) {
+
+      // Check if line contains 'finished chapter' and transform accordingly
+      if (line.contains('finished chapter')) {
+        return line.replaceAll(' finished chapter ', ' ').replaceAll(' finished chapter', '').trim();
+
+        // Check if line contains 'chapter' before a number and 'finished' after it
+      } else if (line.contains('chapter') && line.contains('finished')) {
+        final regExp = RegExp(r'(chapter\s*\d+)\s*finished');
+        if (regExp.hasMatch(line)) {
+          return line.replaceAllMapped(regExp, (match) {
+            // Only return the chapter number, removing 'chapter' and 'finished'
+            return match.group(1)!.replaceAll('chapter', '').trim();
+          }).trim();
+        }
+
+        // Check for 'finished' without 'chapter' and handle it
+      } else if (line.contains('finished')) {
+        return line.replaceAll(' finished ', ' 0 ').replaceAll(' finished', ' 0').trim();
+
+        // Check for 'not started' and handle it
+      } else if (line.contains('not started')) {
+        return line.replaceAll(' not started ', ' 0 ').replaceAll(' not started', ' 0').trim();
+
+      } else {
+        return line.trim();
+      }
+
+    }).join('\n');
+
+    // Update the controller if there's any change in text
+    if (transformedText != currentText) {
+      _importController.value = TextEditingValue(
+        text: transformedText,
+        selection: TextSelection.collapsed(offset: transformedText.length),
+      );
+    }
   }
 
   Future<void> _deleteUserAccount() async {
     try {
       String uid = currentUser?.uid ?? '';
-      // Delete associated books
       await FirebaseFirestore.instance
           .collection('books')
           .where('uid', isEqualTo: uid)
@@ -42,7 +95,6 @@ class _AccountScreenState extends State<AccountScreen> {
         return;
       });
 
-      // Delete user document
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -53,7 +105,6 @@ class _AccountScreenState extends State<AccountScreen> {
         return;
       });
 
-      // Delete Firebase Auth user
       await currentUser?.delete();
       await FirebaseAuth.instance.signOut();
 
@@ -73,6 +124,141 @@ class _AccountScreenState extends State<AccountScreen> {
         content: Text(message),
         backgroundColor: Colors.red.shade400,
       ),
+    );
+  }
+
+  Future<Map<String, dynamic>> _searchBook(String title) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.jikan.moe/v4/manga?q=$title&limit=1'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['data'] != null && data['data'].isNotEmpty) {
+          // Pull the title from the API response
+          String apiTitle = data['data'][0]['title'] ?? '';
+          return {'title': apiTitle, ...data['data'][0]};
+        }
+      }
+    } catch (e) {
+      print('Error searching book: $e');
+    }
+    return {};
+  }
+
+  Future<void> _importBooks(String bookList) async {
+    if (currentUser == null) {
+      _showErrorSnackbar('Please log in to import books.');
+      return;
+    }
+
+    List<String> lines = bookList.trim().split('\n');
+    int importedCount = 0;
+    List<String> failedImports = [];
+
+    for (String line in lines) {
+      try {
+        String title = '';
+        int chapter = 0;
+        line = line.trim();
+        List<String> parts = line.split(' ');
+
+        if (parts.isNotEmpty) {
+          String? potentialChapter = parts.lastOrNull;
+          if (potentialChapter != null && int.tryParse(potentialChapter) != null) {
+            chapter = int.parse(potentialChapter);
+            title = parts.sublist(0, parts.length - 1).join(' ').trim();
+          } else {
+            title = line.trim();
+            if (line.toLowerCase().contains('finished') || line.toLowerCase().contains('not started')) {
+              chapter = 0;
+              title = line.toLowerCase().replaceAll('finished', '').replaceAll('not started', '').trim();
+            }
+          }
+        }
+
+        if (title.isNotEmpty) {
+          // Fetch the title from the API, this now returns the actual title from the API response
+          Map<String, dynamic> searchResult = await _searchBook(title);
+          String apiTitle = searchResult['title'] ?? title; // Fallback to local title if API doesn't return one
+
+          String imageUrl = "https://placehold.co/600x400/png/?text=Manual\\nEntry&font=Oswald";
+          String type = "Novel";
+
+          if (searchResult.isNotEmpty && searchResult['images']?['jpg']?['image_url'] != null) {
+            imageUrl = searchResult['images']['jpg']['image_url'];
+          }
+          if (searchResult.isNotEmpty && searchResult['type'] != null) {
+            type = searchResult['type'];
+          }
+
+          await FirebaseFirestore.instance.collection("books").add({
+            "uid": currentUser!.uid,
+            "title": apiTitle,  // Use the title from the API or fallback to local title
+            "chapter": chapter,
+            "type": type,
+            "imageUrl": imageUrl,
+            "linkURL": "",
+          });
+
+          importedCount++;
+        } else {
+          failedImports.add(line);
+        }
+      } catch (e) {
+        print("Error importing line: $line - $e");
+        failedImports.add(line);
+      }
+    }
+
+    String message = '$importedCount books imported successfully.';
+    if (failedImports.isNotEmpty) {
+      message += '\nFailed to import ${failedImports.length} books: ${failedImports.join(", ")}';
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+
+  void _showImportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Import Books'),
+          content: SingleChildScrollView(
+            child: TextField(
+              controller: _importController,
+              maxLines: 10,
+              decoration: InputDecoration(
+                hintText:
+                "Paste your book list here. Each book should be on a new line. "
+                    "Please be aware that some books will not be added properly."
+                    "The app will try to automatically format it. For optimal results, "
+                    "it should be formatted like: tokyo ghoul 7",
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ElevatedButton(
+              child: Text('Import'),
+              onPressed: () {
+                _importBooks(_importController.text);
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -115,6 +301,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 SizedBox(height: 16),
                 _buildListBooksButton(),
                 SizedBox(height: 16),
+                _buildImportBooksButton(), // Added import books button
+                SizedBox(height: 16),
                 _buildDeleteAccountButton(),
                 SizedBox(height: 32),
               ],
@@ -128,6 +316,31 @@ class _AccountScreenState extends State<AccountScreen> {
       ),
       floatingActionButton: _buildHomeButton(),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+    );
+  }
+
+  // Button to import books
+  Widget _buildImportBooksButton() {
+    return ElevatedButton.icon(
+      onPressed: () {
+        _showImportDialog(context);
+      },
+      icon: Icon(Icons.upload_file),
+      label: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Text(
+          'Import Books',
+          style: TextStyle(fontSize: 16),
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.blueAccent,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+      ),
     );
   }
 
@@ -194,6 +407,7 @@ class _AccountScreenState extends State<AccountScreen> {
               querySnapshot.docs.forEach((element) {
                 bookList += '- ${element.data()['title']} (Chapter ${element.data()['chapter']})\n';
               });
+
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
