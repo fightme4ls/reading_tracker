@@ -11,28 +11,30 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  late List<Widget> _pages;
 
-  // Add the _onBookAdded method
+  @override
+  void initState() {
+    super.initState();
+    _initializePages();
+  }
+
+  void _initializePages() {
+    _pages = [
+      HomeScreen(),
+      LibraryScreen(),
+      AddBookScreen(onBookAdded: _onBookAdded),
+    ];
+  }
+
+  // Switch to Library tab when a book is added
   void _onBookAdded() {
     setState(() {
       _selectedIndex = 1;  // Switch to Library screen
     });
   }
 
-  // List of screens, now passing the onBookAdded function to AddBookScreen
-  static List<Widget> _pages = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _pages = [
-      HomeScreen(),
-      LibraryScreen(),
-      AddBookScreen(onBookAdded: _onBookAdded),  // Passing the callback here
-    ];
-  }
-
-  // Function to handle bottom navigation tab change
+  // Handle bottom navigation tab changes
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -42,10 +44,21 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _selectedIndex == 0
-          ? AppBar(
-        title: Text('Home'),
-        actions: [
+      appBar: _buildAppBar(),
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: _buildBottomNavBar(),
+    );
+  }
+
+  AppBar _buildAppBar() {
+    final titles = ['Home', 'Library', 'Add Book'];
+
+    return AppBar(
+      title: Text(titles[_selectedIndex]),
+      centerTitle: true,
+      elevation: 2,
+      actions: [
+        if (_selectedIndex == 0)  // Only show account button on Home screen
           IconButton(
             icon: Icon(Icons.account_circle),
             onPressed: () {
@@ -54,21 +67,47 @@ class _MainScreenState extends State<MainScreen> {
                 MaterialPageRoute(builder: (context) => AccountScreen()),
               );
             },
+            tooltip: 'Account',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBottomNavBar() {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: Offset(0, -2),
           ),
         ],
-      )  // Change app bar title based on screen
-          : _selectedIndex == 1
-          ? AppBar(title: Text('Library'))
-          : AppBar(title: Text('Add Book')),
-      body: _pages[_selectedIndex],  // Display selected screen from _pages list
-      bottomNavigationBar: BottomNavigationBar(
+      ),
+      child: BottomNavigationBar(
         items: [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.book), label: 'Library'),
-          BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Add'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.book_outlined),
+            activeIcon: Icon(Icons.book),
+            label: 'Library',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add_circle_outline),
+            activeIcon: Icon(Icons.add_circle),
+            label: 'Add',
+          ),
         ],
-        currentIndex: _selectedIndex,  // Track selected index
-        onTap: _onItemTapped,  // Change tab when tapped
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        selectedItemColor: Theme.of(context).primaryColor,
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
       ),
     );
   }

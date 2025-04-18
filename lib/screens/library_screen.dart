@@ -10,221 +10,196 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  // Book data & state
   late Box<Book> bookBox;
-  String _sortOption = 'Title'; // Default sorting option
+  String _sortOption = 'Title';
   TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _isEditingMode = false; // Flag for multi-selection mode
-  Set<Book> _selectedBooks = Set<Book>(); // Store selected books directly
+
+  // Selection mode state
+  bool _isEditingMode = false;
+  Set<Book> _selectedBooks = Set<Book>();
 
   @override
   void initState() {
     super.initState();
     bookBox = Hive.box<Book>('books');
-    _fetchBooksFromFirestore(); // Fetch Firestore books when app starts
-  }
-
-// Fetch books from Firestore and store them in Hive
-  void _fetchBooksFromFirestore() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return; // If no user is logged in, return
-
-    final userId = user.uid;
-    final QuerySnapshot snapshot = await FirebaseFirestore.instance
-        .collection('books')
-        .where('uid', isEqualTo: userId) // Only fetch books for logged-in user
-        .get();
-
-    // Clear existing Hive data to prevent duplicates
-    await bookBox.clear();
-
-    // Add books from Firestore to Hive
-    for (var doc in snapshot.docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final book = Book(
-        id: doc.id, // Assign Firestore ID
-        title: data['title'],
-        type: data['type'],
-        chapter: data['chapter'],
-        imageUrl: data['imageUrl'],
-        uid: data['uid'],
-      );
-
-      bookBox.add(book); // Store in Hive
-    }
-
-    setState(() {}); // Refresh UI
+    _fetchBooksFromFirestore();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditingMode ? 'Select items' : ''),
-        actions: _isEditingMode
-            ? []
-            : [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Text('Sort by:   ', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                DropdownButton<String>(
-                  value: _sortOption,
-                  onChanged: (newValue) {
-                    setState(() {
-                      _sortOption = newValue!;
-                    });
-                  },
-                  items: ['Title', 'Chapter'].map((String value) {
-                    return DropdownMenuItem<String>(value: value, child: Text(value));
-                  }).toList(),
-                ),
-              ],
-            ),
-          ),
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+      floatingActionButton: _isEditingMode ? _buildEditModeActions() : null,
+    );
+  }
+
+  AppBar _buildAppBar() {
+    if (_isEditingMode) {
+      return AppBar(
+        title: Text(_selectedBooks.isEmpty
+            ? 'Select items'
+            : '${_selectedBooks.length} selected'),
+        leading: IconButton(
+          icon: Icon(Icons.close),
+          onPressed: () {
+            setState(() {
+              _isEditingMode = false;
+              _selectedBooks.clear();
+            });
+          },
+        ),
+      );
+    } else {
+      return AppBar(
+        title: Text('Library'),
+        actions: [
+          _buildSortDropdown(),
           IconButton(
             icon: Icon(Icons.edit),
             onPressed: () {
               setState(() {
-                _isEditingMode = !_isEditingMode;
-                if (!_isEditingMode) {
-                  _selectedBooks.clear(); // Clear selection when exiting editing mode
-                }
+                _isEditingMode = true;
               });
             },
           ),
         ],
-      ),
-      body: Column(
-        children: [
-          if (!_isEditingMode)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search for a book...',
-                  prefixIcon: Icon(Icons.search),
-                ),
-                onChanged: (query) {
-                  setState(() {
-                    _searchQuery = query;
-                  });
-                },
-              ),
-            ),
-          if (_isEditingMode && _selectedBooks.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text('Select items', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          if (_isEditingMode && _selectedBooks.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text('${_selectedBooks.length} selected', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-          Expanded(
-            child: ValueListenableBuilder(
-              valueListenable: bookBox.listenable(),
-              builder: (context, Box<Book> box, _) {
-                // Get the current logged-in user UID
-                final user = FirebaseAuth.instance.currentUser;
-                final userId = user?.uid ?? '';
+      );
+    }
+  }
 
-                // Filter books based on search query and the user's UID
-                final books = box.values
-                    .where((book) =>
-                book.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
-                    book.uid == userId) // Filter by user UID
-                    .toList();
-
-                // Sort books based on selected sort option
-                if (_sortOption == 'Title') {
-                  books.sort((a, b) => a.title.compareTo(b.title)); // Sort by title
-                } else if (_sortOption == 'Chapter') {
-                  books.sort((a, b) => a.chapter.compareTo(b.chapter)); // Sort by chapter
-                }
-
-                if (books.isEmpty) {
-                  return Center(child: Text("No books found."));
-                }
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0), // Adjust padding from the edge
-                  child: GridView.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,  // Number of tiles per row
-                      crossAxisSpacing: 8.0,  // Reduced spacing between tiles horizontally
-                      mainAxisSpacing: 8.0,   // Reduced spacing between tiles vertically
-                      childAspectRatio: 0.7,  // Adjusted aspect ratio for better tile appearance
-                    ),
-                    itemCount: books.length,
-                    itemBuilder: (context, index) {
-                      final book = books[index];
-                      return _buildBookTile(book);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: _isEditingMode
-          ? Stack(
-        children: [
-          Positioned(
-            left: 44.0,
-            bottom: 16.0,
-            child: Column(
+  Widget _buildSortDropdown() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: DropdownButton<String>(
+        underline: Container(),
+        icon: Icon(Icons.sort),
+        value: _sortOption,
+        onChanged: (newValue) {
+          setState(() {
+            _sortOption = newValue!;
+          });
+        },
+        items: ['Title', 'Chapter'].map((String value) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4.0),
-                  child: FloatingActionButton(
-                    onPressed: () {
-                      setState(() {
-                        _isEditingMode = false;
-                        _selectedBooks.clear();
-                      });
-                    },
-                    child: Icon(Icons.cancel),
-                    backgroundColor: Colors.grey,
-                    heroTag: 'cancel',
-                  ),
-                ),
-                Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.grey, fontSize: 12.0),
-                ),
+                Icon(value == 'Title' ? Icons.sort_by_alpha : Icons.format_list_numbered, size: 16),
+                SizedBox(width: 8),
+                Text(value),
               ],
             ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return Column(
+      children: [
+        if (!_isEditingMode) _buildSearchBar(),
+        Expanded(
+          child: ValueListenableBuilder(
+            valueListenable: bookBox.listenable(),
+            builder: (context, Box<Book> box, _) {
+              return _buildBookGrid(box);
+            },
           ),
-          if (_selectedBooks.isNotEmpty)
-            Positioned(
-              right: 16.0,
-              bottom: 16.0,
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4.0),
-                    child: FloatingActionButton(
-                      onPressed: _deleteSelectedBooks,
-                      child: Icon(Icons.delete),
-                      backgroundColor: Colors.red,
-                      heroTag: 'delete',
-                    ),
-                  ),
-                  Text(
-                    'Delete',
-                    style: TextStyle(color: Colors.red, fontSize: 12.0),
-                  ),
-                ],
-              ),
-            ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search for a book...',
+          prefixIcon: Icon(Icons.search),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.grey.shade200,
+          contentPadding: EdgeInsets.symmetric(vertical: 0),
+        ),
+        onChanged: (query) {
+          setState(() {
+            _searchQuery = query;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildBookGrid(Box<Book> box) {
+    // Get the current logged-in user UID
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid ?? '';
+
+    // Filter books based on search query and user's UID
+    final books = box.values
+        .where((book) =>
+    book.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
+        book.uid == userId)
+        .toList();
+
+    // Sort books based on selected sort option
+    if (_sortOption == 'Title') {
+      books.sort((a, b) => a.title.compareTo(b.title));
+    } else if (_sortOption == 'Chapter') {
+      books.sort((a, b) => a.chapter.compareTo(b.chapter));
+    }
+
+    if (books.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: GridView.builder(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12.0,
+          mainAxisSpacing: 16.0,
+          childAspectRatio: 0.65,
+        ),
+        itemCount: books.length,
+        itemBuilder: (context, index) {
+          final book = books[index];
+          return _buildBookTile(book);
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.menu_book, size: 80, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            "No books found",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          SizedBox(height: 8),
+          Text(
+            _searchQuery.isNotEmpty
+                ? "Try a different search term"
+                : "Add books to your library",
+            style: TextStyle(color: Colors.grey),
+          ),
         ],
-      )
-          : null,
+      ),
     );
   }
 
@@ -253,95 +228,196 @@ class _LibraryScreenState extends State<LibraryScreen> {
           });
         }
       },
-      child: Opacity(
-        opacity: isSelected ? 0.7 : 1.0,
-        child: Card(
-          elevation: isSelected ? 8.0 : 2.0,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Stack(
+      child: Card(
+        elevation: isSelected ? 6.0 : 2.0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: isSelected
+              ? BorderSide(color: Theme.of(context).primaryColor, width: 2)
+              : BorderSide.none,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  book.imageUrl != null
-                      ? Image.network(book.imageUrl!, height: 200, width: 150, fit: BoxFit.cover)
-                      : SizedBox.shrink(),
+                  // Book cover image
+                  ClipRRect(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                    child: book.imageUrl != null && book.imageUrl!.isNotEmpty
+                        ? Image.network(
+                      book.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey.shade300,
+                          child: Icon(Icons.broken_image, size: 50),
+                        );
+                      },
+                    )
+                        : Container(
+                      color: Colors.grey.shade300,
+                      child: Icon(Icons.book, size: 50),
+                    ),
+                  ),
+                  // Selection indicator
                   if (isSelected)
                     Positioned(
-                      top: 8.0,
-                      right: 8.0,
+                      top: 8,
+                      right: 8,
                       child: Container(
-                        padding: EdgeInsets.all(1.0),
+                        padding: EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: Colors.grey[300],
+                          color: Colors.white,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.black, width: 2.0),
                         ),
                         child: Icon(
                           Icons.check_circle,
-                          color: Colors.grey,
-                          size: 30.0,
+                          color: Theme.of(context).primaryColor,
+                          size: 24,
                         ),
                       ),
                     ),
                 ],
               ),
-              SizedBox(height: 8.0),
-              // Wrap title in Flexible to prevent overflow and handle long text
-              Flexible(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0), // Add horizontal padding
-                  child: Text(
+            ),
+            // Book info
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     book.title,
                     style: TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis, // Adds ellipsis if text overflows
-                    maxLines: 1, // Limit the number of lines
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
-                ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.bookmark_border, size: 16, color: Colors.grey),
+                      SizedBox(width: 4),
+                      Text(
+                        'Ch. ${book.chapter}',
+                        style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                      ),
+                      Spacer(),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _getTypeColor(book.type).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          book.type,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: _getTypeColor(book.type),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              Text(
-                'Chapter ${book.chapter}',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  Color _getTypeColor(String type) {
+    switch (type) {
+      case 'Novel':
+        return Colors.blue;
+      case 'Manga':
+        return Colors.red;
+      case 'Manhwa':
+        return Colors.purple;
+      case 'Light Novel':
+        return Colors.amber.shade800;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _buildEditModeActions() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (_selectedBooks.isNotEmpty)
+            FloatingActionButton.extended(
+              onPressed: _deleteSelectedBooks,
+              backgroundColor: Colors.red,
+              icon: Icon(Icons.delete),
+              label: Text('Delete'),
+              heroTag: 'delete',
+            ),
+        ],
+      ),
+    );
+  }
 
   void _showEditDialog(Book book) {
-    TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
     TextEditingController titleController = TextEditingController(text: book.title);
-    TextEditingController linkController = TextEditingController(text: book.linkURL);
-    TextEditingController imgController = TextEditingController(text: book.imageUrl);
+    TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
+    TextEditingController linkController = TextEditingController(text: book.linkURL ?? '');
+    TextEditingController imgController = TextEditingController(text: book.imageUrl ?? '');
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: Text('Edit Book'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: InputDecoration(labelText: 'Title'),
-              ),
-              TextField(
-                controller: chapterController,
-                decoration: InputDecoration(labelText: 'Chapter'),
-                keyboardType: TextInputType.number,
-              ),
-              TextField(
-                controller: linkController,
-                decoration: InputDecoration(labelText: 'Link'),
-              ),
-              TextField(
-                controller: imgController,
-                decoration: InputDecoration(labelText: 'Image Link'),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    prefixIcon: Icon(Icons.title),
+                  ),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: chapterController,
+                  decoration: InputDecoration(
+                    labelText: 'Chapter',
+                    prefixIcon: Icon(Icons.bookmark),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: linkController,
+                  decoration: InputDecoration(
+                    labelText: 'Link (optional)',
+                    prefixIcon: Icon(Icons.link),
+                  ),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: imgController,
+                  decoration: InputDecoration(
+                    labelText: 'Image Link (optional)',
+                    prefixIcon: Icon(Icons.image),
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -350,7 +426,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               },
               child: Text('Cancel'),
             ),
-            TextButton(
+            ElevatedButton(
               onPressed: () async {
                 // Update the local Hive data
                 book.title = titleController.text;
@@ -362,21 +438,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 await book.save();
 
                 // Update the book in Firestore
-                FirebaseFirestore.instance
-                    .collection("books")
-                    .doc(book.id) // Get the Firestore document using the book's ID
-                    .update({
-                  "title": book.title,
-                  "chapter": book.chapter,
-                  "linkURL": book.linkURL,
-                  "imageUrl" : book.imageUrl,
-                })
-                    .then((_) {
-                  print("Book updated in Firestore.");
-                })
-                    .catchError((error) {
-                  print("Failed to update book in Firestore: $error");
-                });
+                _updateBookInFirestore(book);
 
                 Navigator.pop(context);
               },
@@ -388,19 +450,64 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  void _updateBookInFirestore(Book book) {
+    if (book.id == null) return;
+
+    FirebaseFirestore.instance
+        .collection("books")
+        .doc(book.id)
+        .update({
+      "title": book.title,
+      "chapter": book.chapter,
+      "linkURL": book.linkURL ?? '',
+      "imageUrl": book.imageUrl ?? '',
+    })
+        .then((_) {
+      print("Book updated in Firestore.");
+    })
+        .catchError((error) {
+      print("Failed to update book in Firestore: $error");
+      _showErrorSnackbar("Failed to sync with cloud.");
+    });
+  }
 
   void _deleteSelectedBooks() {
-    for (Book book in _selectedBooks) {
-      FirebaseFirestore.instance
-          .collection("books")
-          .doc(book.id)
-          .delete()
-          .then((_) {
-        print("Book with id ${book.id} deleted from Firestore.");
-      }).catchError((error) {
-        print("Failed to delete book: $error");
-      });
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Books'),
+        content: Text('Are you sure you want to delete ${_selectedBooks.length} ${_selectedBooks.length == 1 ? 'book' : 'books'}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _performDelete();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
 
+  void _performDelete() {
+    for (Book book in _selectedBooks) {
+      if (book.id != null) {
+        FirebaseFirestore.instance
+            .collection("books")
+            .doc(book.id)
+            .delete()
+            .then((_) {
+          print("Book with id ${book.id} deleted from Firestore.");
+        }).catchError((error) {
+          print("Failed to delete book: $error");
+        });
+      }
       book.delete();
     }
 
@@ -408,5 +515,56 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _selectedBooks.clear();
       _isEditingMode = false;
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Books deleted successfully'))
+    );
+  }
+
+  void _fetchBooksFromFirestore() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userId = user.uid;
+
+    try {
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('books')
+          .where('uid', isEqualTo: userId)
+          .get();
+
+      // Clear existing Hive data to prevent duplicates
+      await bookBox.clear();
+
+      // Add books from Firestore to Hive
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final book = Book(
+          id: doc.id,
+          title: data['title'] ?? 'Untitled',
+          type: data['type'] ?? 'Novel',
+          chapter: data['chapter'] ?? 1,
+          imageUrl: data['imageUrl'],
+          linkURL: data['linkURL'],
+          uid: data['uid'],
+        );
+
+        bookBox.add(book);
+      }
+
+      setState(() {});
+    } catch (e) {
+      print("Error fetching books: $e");
+      _showErrorSnackbar("Failed to load books from cloud.");
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 }

@@ -54,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
             randomMangaImage = manga['images']['jpg']['image_url'];
             randomMangaSynopsis = manga['synopsis'];
             randomMangaGenres = genres;
+            isSynopsisExpanded = false;
           });
         } else {
           print("Genres incorrect. Retrying...");
@@ -72,46 +73,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text('Extremely Experimental. Expect Lag And Long Waits.'),
-            SizedBox(height: 20),
-            Center(
-              child: ElevatedButton(
-                onPressed: fetchRandomManga,
-                child: Text('Pick a Random Manga'),
-              ),
-            ),
-            SizedBox(height: 20),
-            if (randomMangaTitle != null)
-              Center(
-                child: Card(
-                  elevation: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      if (randomMangaImage != null && randomMangaImage!.isNotEmpty)
-                        Image.network(randomMangaImage!, height: 150, fit: BoxFit.cover),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text(randomMangaTitle ?? 'No Title',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: _buildGenres(),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: _buildSynopsis(),
-                      ),
-                      // Removed "Read more on MyAnimeList" button here
-                    ],
-                  ),
-                ),
-              ),
+            _buildWarningText(),
+            SizedBox(height: 24),
+            _buildRandomButton(),
+            SizedBox(height: 24),
+            if (randomMangaTitle != null) _buildMangaCard(),
           ],
         ),
       ),
@@ -123,54 +93,81 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showGenreFilter(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text("Select Genres", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Wrap(
-                    spacing: 8.0,
-                    runSpacing: 4.0,
-                    children: availableGenres.map((genre) {
-                      final isSelected = selectedGenres.contains(genre);
-                      return ChoiceChip(
-                        label: Text(genre),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          setModalState(() {
-                            setState(() {
-                              if (selected) {
-                                selectedGenres.add(genre);
-                              } else {
-                                selectedGenres.remove(genre);
-                              }
-                              print("Selected Genres: $selectedGenres");
-                            });
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    child: Text("Apply Filter"),
-                  ),
-                ],
+  Widget _buildWarningText() {
+    return Container(
+      padding: EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.amber.shade900),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Experimental feature. May experience lag and longer wait times.',
+              style: TextStyle(color: Colors.amber.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRandomButton() {
+    return ElevatedButton.icon(
+      onPressed: fetchRandomManga,
+      icon: Icon(Icons.shuffle),
+      label: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Text('Pick a Random Manga', style: TextStyle(fontSize: 16)),
+      ),
+      style: ElevatedButton.styleFrom(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMangaCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (randomMangaImage != null && randomMangaImage!.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
+                randomMangaImage!,
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
               ),
-            );
-          },
-        );
-      },
+            ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              randomMangaTitle ?? 'No Title',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: _buildGenres(),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildSynopsis(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -178,10 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Wrap(
       spacing: 8.0,
       runSpacing: 4.0,
+      alignment: WrapAlignment.center,
       children: randomMangaGenres
           .map((genre) => Chip(
         label: Text(genre),
-        backgroundColor: Colors.grey,
+        backgroundColor: Colors.blue.shade100,
+        labelStyle: TextStyle(color: Colors.blue.shade900),
       ))
           .toList(),
     );
@@ -200,18 +199,98 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           isSynopsisExpanded ? synopsis : truncatedSynopsis,
-          style: TextStyle(fontSize: 14),
+          style: TextStyle(fontSize: 16),
+          textAlign: TextAlign.justify,
         ),
         if (synopsis.length > maxLength)
-          TextButton(
+          TextButton.icon(
             onPressed: () {
               setState(() {
                 isSynopsisExpanded = !isSynopsisExpanded;
               });
             },
-            child: Text(isSynopsisExpanded ? 'Show Less' : 'Show More'),
+            icon: Icon(
+              isSynopsisExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+            ),
+            label: Text(isSynopsisExpanded ? 'Show Less' : 'Show More'),
           ),
       ],
+    );
+  }
+
+  void _showGenreFilter(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Filter by Genres",
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8.0,
+                    runSpacing: 8.0,
+                    children: availableGenres.map((genre) {
+                      final isSelected = selectedGenres.contains(genre);
+                      return ChoiceChip(
+                        label: Text(genre),
+                        selected: isSelected,
+                        selectedColor: Colors.blue.shade100,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.blue.shade900 : Colors.black87,
+                        ),
+                        onSelected: (selected) {
+                          setModalState(() {
+                            setState(() {
+                              if (selected) {
+                                selectedGenres.add(genre);
+                              } else {
+                                selectedGenres.remove(genre);
+                              }
+                            });
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            selectedGenres.clear();
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Text("Clear All"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: Text("Apply Filter"),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
