@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'main_screen.dart'; // Import MainScreen
 import 'signup_page.dart'; // Import SignUpPage
+import 'account_screen.dart';
 import 'forgotpassword_page.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -188,7 +189,7 @@ class _LoginPageState extends State<LoginPage> {
                     }
                   } on FirebaseAuthException catch (error) {
                     setState(() {
-                      _errorMessage = 'Email or password is incorrect.';
+                      _errorMessage = 'Either verify your email or email/password is incorrect.';
                     });
                     print("Failed to sign in! $error");
                     FirebaseAuth.instance.signOut();
@@ -265,18 +266,6 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => MainScreen()),
-          );
-        },
-        backgroundColor: Colors.blueAccent,
-        child: Icon(Icons.home, size: 30, color: Colors.white),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

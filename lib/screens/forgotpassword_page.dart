@@ -18,6 +18,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Forgot Password'),
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
@@ -86,6 +87,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       _infoMessage = 'A password reset link has been sent to your email address.';
                       _errorMessage = null;
                     });
+
+                    emailController.clear();
                   } on FirebaseAuthException catch (error) {
                     setState(() {
                       _errorMessage = 'Error: ${error.message}';
@@ -121,24 +124,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           ),
         ),
       ),
-      // Back to Home FAB
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Navigate back to the Main screen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => MainScreen()),
-          );
-        },
-        backgroundColor: Colors.blueAccent,
-        child: Icon(
-          Icons.home,
-          size: 30,
-          color: Colors.white,
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

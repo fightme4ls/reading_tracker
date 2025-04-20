@@ -372,6 +372,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
           selectedType = 'Manhwa';
         }
       }
+      titleController.clear();
     });
   }
 

@@ -91,20 +91,11 @@ class _AccountScreenState extends State<AccountScreen> {
       await bookBox.deleteAll(keysToDelete);
       print("Deleted ${keysToDelete.length} books from local storage.");
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .delete()
-          .catchError((error) {
-        print("Error deleting user document: $error");
-        _showErrorSnackbar('Failed to delete user information.');
-        return;
-      });
-
       await currentUser?.delete();
       await FirebaseAuth.instance.signOut();
+      _showSnackbar('Account deleted.');
 
-      Navigator.pushReplacement(
+      Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => LoginPage()),
       );
@@ -119,6 +110,15 @@ class _AccountScreenState extends State<AccountScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red.shade400,
+      ),
+    );
+  }
+
+  void _showSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
       ),
     );
   }
@@ -287,9 +287,10 @@ class _AccountScreenState extends State<AccountScreen> {
               icon: Icon(Icons.exit_to_app, color: Colors.white),
               onPressed: () {
                 FirebaseAuth.instance.signOut().then((_) {
-                  Navigator.pushReplacement(
+                  Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => LoginPage()),
+                        (Route<dynamic> route) => false, // Remove all previous routes
                   );
                 });
               },
@@ -322,8 +323,6 @@ class _AccountScreenState extends State<AccountScreen> {
           ),
         ),
       ),
-      floatingActionButton: _buildHomeButton(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 
@@ -516,7 +515,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget _buildLoginButton() {
     return ElevatedButton.icon(
       onPressed: () {
-        Navigator.pushReplacement(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => LoginPage()),
         );
@@ -540,21 +539,5 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  Widget _buildHomeButton() {
-    return FloatingActionButton(
-      onPressed: () {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => MainScreen()),
-        );
-      },
-      backgroundColor: Colors.blueAccent,
-      child: Icon(
-        Icons.home,
-        size: 30,
-        color: Colors.white,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    );
-  }
+
 }

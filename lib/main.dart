@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/main_screen.dart';
+import 'screens/login_page.dart'; // Import LoginPage
 import 'models/book.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
 import 'firebase_options.dart';
 
 // Function to update existing books with a lastRead timestamp
@@ -49,7 +51,18 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Reading Tracker',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: MainScreen(),
+      home: _getInitialScreen(), // Use a helper function to determine the initial screen
     );
+  }
+}
+
+Widget _getInitialScreen() {
+  final auth = FirebaseAuth.instance;
+  if (auth.currentUser != null) {
+    // User is logged in
+    return MainScreen();
+  } else {
+    // User is not logged in
+    return LoginPage();
   }
 }

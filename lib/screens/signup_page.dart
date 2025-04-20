@@ -30,6 +30,7 @@ class _SignUpPageState extends State<SignUpPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Sign Up'),
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.blueAccent,
         foregroundColor: Colors.white,
@@ -160,6 +161,10 @@ class _SignUpPageState extends State<SignUpPage> {
                     });
 
                     await FirebaseAuth.instance.signOut();
+
+                    emailController.clear();
+                    passwordController.clear();
+                    confirmPasswordController.clear();
                   } on FirebaseAuthException catch (error) {
                     setState(() {
                       _errorMessage = error.message ?? 'An unknown error occurred';
@@ -203,24 +208,6 @@ class _SignUpPageState extends State<SignUpPage> {
           ),
         ),
       ),
-      // Back to Home FAB
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Navigate back to the Main screen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => MainScreen()),
-          );
-        },
-        backgroundColor: Colors.blueAccent,
-        child: Icon(
-          Icons.home,
-          size: 30,
-          color: Colors.white,
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }
