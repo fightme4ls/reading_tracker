@@ -3,7 +3,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/book.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -33,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  Future<void> _continueReading(Book book) async {
+  Future<void> _continueReading(BuildContext context, Book book) async {
     final now = DateTime.now();
     book.lastRead = now;
     await book.save();
@@ -46,10 +47,154 @@ class _HomeScreenState extends State<HomeScreen> {
         _showSnackbar('Failed to update read time remotely.');
       });
     }
+
+    if (book.linkURL != null && book.linkURL!.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WebViewScreen(url: book.linkURL!),
+        ),
+      );
+    } else {
+      _showSnackbar('No link available for this book.');
+    }
   }
 
   void _showSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showEditDialog(Book book) {
+    TextEditingController titleController = TextEditingController(text: book.title);
+    TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
+    TextEditingController linkController = TextEditingController(text: book.linkURL ?? '');
+    TextEditingController imgController = TextEditingController(text: book.imageUrl ?? '');
+    String selectedType = book.type;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Edit Book'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    prefixIcon: Icon(Icons.title),
+                  ),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: chapterController,
+                  decoration: InputDecoration(
+                    labelText: 'Chapter',
+                    prefixIcon: Icon(Icons.bookmark),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: linkController,
+                  decoration: InputDecoration(
+                    labelText: 'Link (optional)',
+                    prefixIcon: Icon(Icons.link),
+                  ),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: imgController,
+                  decoration: InputDecoration(
+                    labelText: 'Image Link (optional)',
+                    prefixIcon: Icon(Icons.image),
+                  ),
+                ),
+                SizedBox(height: 16),
+                DropdownButton<String>(
+                  value: selectedType,
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      selectedType = newValue!;
+                    });
+                  },
+                  items: <String>['Novel', 'Manga', 'Manhwa', 'Light Novel']
+                      .map<DropdownMenuItem<String>>((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                book.title = titleController.text;
+                book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
+                book.linkURL = linkController.text;
+                book.imageUrl = imgController.text;
+                book.type = selectedType;
+
+                await book.save();
+                _updateBookInFirestore(book);
+
+                Navigator.pop(context);
+              },
+              child: Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _updateBookInFirestore(Book book) {
+    if (book.id == null) return;
+
+    FirebaseFirestore.instance
+        .collection("books")
+        .doc(book.id)
+        .update({
+      "title": book.title,
+      "chapter": book.chapter,
+      "linkURL": book.linkURL ?? '',
+      "imageUrl": book.imageUrl ?? '',
+      "type": book.type,
+      "lastRead": book.lastRead?.toIso8601String() ?? DateTime.now().toIso8601String(),
+    })
+        .then((_) {
+      print("Book updated in Firestore.");
+    })
+        .catchError((error) {
+      print("Failed to update book in Firestore: $error");
+      _showSnackbar("Failed to sync with cloud.");
+    });
+  }
+
+  Color _getTypeColor(String type) {
+    switch (type) {
+      case 'Novel':
+        return Colors.blue;
+      case 'Manga':
+        return Colors.red;
+      case 'Manhwa':
+        return Colors.purple;
+      case 'Light Novel':
+        return Colors.amber.shade800;
+      default:
+        return Colors.grey;
+    }
   }
 
   @override
@@ -76,7 +221,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
           final allBooks = box.values.where((book) => book.uid == _currentUser!.uid).toList();
 
-          // Sort books by lastRead date, most recent first
           allBooks.sort((a, b) {
             final aTime = a.lastRead ?? DateTime(1900);
             final bTime = b.lastRead ?? DateTime(1900);
@@ -171,8 +315,8 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
-        onTap: () => _continueReading(book),
         borderRadius: BorderRadius.circular(12),
+        onTap: () => _showEditDialog(book), // Call edit dialog on tap
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
@@ -255,7 +399,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       children: [
                         ElevatedButton.icon(
-                          onPressed: () => _continueReading(book),
+                          onPressed: () => _continueReading(context, book),
                           icon: Icon(Icons.play_arrow, size: 16),
                           label: Text('Continue'),
                           style: ElevatedButton.styleFrom(
@@ -278,18 +422,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Color _getTypeColor(String type) {
-    switch (type) {
-      case 'Novel':
-        return Colors.blue;
-      case 'Manga':
-        return Colors.red;
-      case 'Manhwa':
-        return Colors.purple;
-      case 'Light Novel':
-        return Colors.amber.shade800;
-      default:
-        return Colors.grey;
-    }
+}
+
+//WebViewScreen
+class WebViewScreen extends StatelessWidget {
+  final String url;
+
+  WebViewScreen({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Currently Reading'),
+      ),
+      body: WebViewWidget(
+        controller: WebViewController()
+          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..loadRequest(Uri.parse(url)),
+      ),
+    );
   }
 }

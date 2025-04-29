@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/book.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LibraryScreen extends StatefulWidget {
   @override
@@ -16,6 +17,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  // View mode state
+  bool _isCardView = false; // true for card view, false for list view
+  static const String _viewPreferenceKey = 'library_view_preference';
+
   // Selection mode state
   bool _isEditingMode = false;
   Set<Book> _selectedBooks = Set<Book>();
@@ -24,7 +29,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void initState() {
     super.initState();
     bookBox = Hive.box<Book>('books');
+    _loadViewPreference();
     _fetchBooksFromFirestore();
+  }
+
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isCardView = prefs.getBool(_viewPreferenceKey) ?? true; // Default to card view
+    });
   }
 
   @override
@@ -65,6 +78,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return AppBar(
         title: Text('Library'),
         actions: [
+          _buildViewToggle(),
           _buildSortDropdown(),
           IconButton(
             icon: Icon(Icons.edit),
@@ -77,6 +91,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ],
       );
     }
+  }
+
+  Widget _buildViewToggle() {
+    return IconButton(
+      icon: Icon(_isCardView ? Icons.view_list : Icons.grid_view),
+      tooltip: _isCardView ? 'Switch to List View' : 'Switch to Card View',
+      onPressed: () async {
+        setState(() {
+          _isCardView = !_isCardView;
+        });
+
+        // Save the preference
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_viewPreferenceKey, _isCardView);
+      },
+    );
   }
 
   Widget _buildSortDropdown() {
@@ -115,7 +145,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: ValueListenableBuilder(
             valueListenable: bookBox.listenable(),
             builder: (context, Box<Book> box, _) {
-              return _buildBookGrid(box);
+              return _isCardView ? _buildBookGrid(box) : _buildBookList(box);
             },
           ),
         ),
@@ -148,11 +178,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildBookGrid(Box<Book> box) {
+  List<Book> _getFilteredAndSortedBooks() {
     final user = FirebaseAuth.instance.currentUser;
     final userId = user?.uid ?? '';
 
-    final books = box.values
+    final books = bookBox.values
         .where((book) =>
     book.title.toLowerCase().contains(_searchQuery.toLowerCase()) &&
         book.uid == userId)
@@ -163,6 +193,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     } else if (_sortOption == 'Chapter') {
       books.sort((a, b) => a.chapter.compareTo(b.chapter));
     }
+
+    return books;
+  }
+
+  Widget _buildBookGrid(Box<Book> box) {
+    final books = _getFilteredAndSortedBooks();
 
     if (books.isEmpty) {
       return _buildEmptyState();
@@ -180,9 +216,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
         itemCount: books.length,
         itemBuilder: (context, index) {
           final book = books[index];
-          return _buildBookTile(book);
+          return _buildBookCard(book);
         },
       ),
+    );
+  }
+
+  Widget _buildBookList(Box<Book> box) {
+    final books = _getFilteredAndSortedBooks();
+
+    if (books.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.symmetric(vertical: 8.0),
+      itemCount: books.length,
+      separatorBuilder: (context, index) => Divider(height: 1),
+      itemBuilder: (context, index) {
+        final book = books[index];
+        return _buildBookListItem(book);
+      },
     );
   }
 
@@ -209,7 +263,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildBookTile(Book book) {
+  Widget _buildBookCard(Book book) {
     bool isSelected = _selectedBooks.contains(book);
 
     return GestureDetector(
@@ -334,6 +388,98 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBookListItem(Book book) {
+    bool isSelected = _selectedBooks.contains(book);
+
+    return ListTile(
+      contentPadding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      onTap: () {
+        if (_isEditingMode) {
+          setState(() {
+            if (isSelected) {
+              _selectedBooks.remove(book);
+            } else {
+              _selectedBooks.add(book);
+            }
+          });
+        } else {
+          _showEditDialog(book);
+        }
+      },
+      onLongPress: () {
+        if (!_isEditingMode) {
+          setState(() {
+            _isEditingMode = true;
+            _selectedBooks.add(book);
+          });
+        }
+      },
+      tileColor: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: isSelected
+            ? BorderSide(color: Theme.of(context).primaryColor, width: 1)
+            : BorderSide.none,
+      ),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: _getTypeColor(book.type).withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            book.title.isNotEmpty ? book.title[0].toUpperCase() : '?',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: _getTypeColor(book.type),
+              fontSize: 18,
+            ),
+          ),
+        ),
+      ),
+      title: Text(
+        book.title,
+        style: TextStyle(fontWeight: FontWeight.w500),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        book.type,
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              'Ch. ${book.chapter}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).primaryColor,
+              ),
+            ),
+          ),
+          if (isSelected)
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: Icon(
+                Icons.check_circle,
+                color: Theme.of(context).primaryColor,
+              ),
+            ),
+        ],
       ),
     );
   }

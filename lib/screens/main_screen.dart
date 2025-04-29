@@ -27,10 +27,41 @@ class _MainScreenState extends State<MainScreen> {
     ];
   }
 
+  void _showInfoDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Recently Read'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text('This page shows your recently read.'),
+                SizedBox(height: 8),
+                Text('If you set a link for your books and mangas, clicking "Continue" will open it for you and update your last read time.'),
+                SizedBox(height: 8),
+                Text('If no link is set, clicking "Continue" will just update your last read time.'),
+                // Add more info here as needed for the Home Screen
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Switch to Library tab when a book is added
   void _onBookAdded() {
     setState(() {
-      _selectedIndex = 1;  // Switch to Library screen
+      _selectedIndex = 1; // Switch to Library screen
     });
   }
 
@@ -52,22 +83,30 @@ class _MainScreenState extends State<MainScreen> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      title: null, // Set title to null to remove the dynamic title
+      leading: _selectedIndex == 0
+          ? IconButton(
+        icon: Icon(Icons.info_outline),
+        onPressed: () {
+          _showInfoDialog(context);
+        },
+        tooltip: 'Home Screen Info',
+      )
+          : null,
+      title: null,
       centerTitle: true,
       elevation: 2,
       actions: [
-        if (_selectedIndex == 0) // Only show account button on Home screen
-          IconButton(
-            icon: Icon(Icons.account_circle),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AccountScreen()),
-              );
-            },
-            tooltip: 'Account',
-          ),
-        SizedBox(width: 8), // Add some spacing to the right
+        IconButton(
+          icon: Icon(Icons.account_circle),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AccountScreen()),
+            );
+          },
+          tooltip: 'Account',
+        ),
+        SizedBox(width: 8),
       ],
     );
   }

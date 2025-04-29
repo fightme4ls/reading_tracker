@@ -19,7 +19,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController chapterController = TextEditingController();
   final TextEditingController imageUrlController = TextEditingController();
-  final TextEditingController linkUrlController = TextEditingController(); // Added for link URL
+  final TextEditingController linkUrlController = TextEditingController();
 
   String selectedType = 'Novel';
   List<dynamic> searchResults = [];
@@ -42,7 +42,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
     titleController.dispose();
     chapterController.dispose();
     imageUrlController.dispose();
-    linkUrlController.dispose(); // Added to dispose the new controller
+    linkUrlController.dispose();
     super.dispose();
   }
 
@@ -60,7 +60,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
                 selectedImage = null;
                 if (!_isManualEntry) {
                   imageUrlController.clear();
-                  linkUrlController.clear(); // Clear link URL when switching modes
+                  linkUrlController.clear();
                 }
               });
             },
@@ -100,7 +100,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
         SizedBox(height: 20),
         _buildChapterField(),
         SizedBox(height: 20),
-        _buildLinkUrlField(), // Added link URL field
+        _buildLinkUrlField(),
         if (_isManualEntry) ...[
           SizedBox(height: 20),
           _buildImageUrlField(),
@@ -124,7 +124,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
       ),
       onChanged: (value) {
         if (!_isManualEntry) {
-          _searchManga(value); // Trigger search on every text change
+          _searchManga(value);
         }
       },
     );
@@ -409,7 +409,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
         imageUrl: imageUrl,
         linkURL: linkURL.isNotEmpty ? linkURL : null,
         uid: uid,
-        lastRead: now, // Set lastRead to current time
+        lastRead: now,
       );
 
       final box = Hive.box<Book>('books');
@@ -422,7 +422,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
         "imageUrl": imageUrl,
         "linkURL": linkURL,
         "uid": uid,
-        "lastRead": now.toIso8601String(), // Store as ISO string in Firestore
+        "lastRead": now.toIso8601String(),
       });
 
       book.id = docRef.id;
