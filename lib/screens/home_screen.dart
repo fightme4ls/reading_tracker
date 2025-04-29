@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/book.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'dart:async';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -49,12 +51,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (book.linkURL != null && book.linkURL!.isNotEmpty) {
-      Navigator.push(
+      // Wait for navigation to complete and then refresh the UI when popped
+      await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => WebViewScreen(url: book.linkURL!),
+          builder: (context) => WebViewScreen(url: book.linkURL!, book: book),
         ),
       );
+
+      // Refresh state after coming back from WebView
+      if (mounted) {
+        setState(() {
+          // This will refresh the UI with potentially updated book data
+        });
+      }
     } else {
       _showSnackbar('No link available for this book.');
     }
@@ -425,21 +435,115 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 //WebViewScreen
-class WebViewScreen extends StatelessWidget {
+class WebViewScreen extends StatefulWidget {
   final String url;
+  final Book book;
 
-  WebViewScreen({required this.url});
+  WebViewScreen({required this.url, required this.book});
+
+  @override
+  _WebViewScreenState createState() => _WebViewScreenState();
+}
+
+class _WebViewScreenState extends State<WebViewScreen> {
+  late WebViewController _webViewController;
+  String _currentUrl = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUrl = widget.url;
+    _setupWebView();
+  }
+
+  void _setupWebView() {
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+              _currentUrl = url;
+            });
+          },
+          onPageFinished: (String url) {
+            setState(() {
+              _isLoading = false;
+              _currentUrl = url;
+            });
+          },
+          onUrlChange: (UrlChange change) {
+            if (change.url != null) {
+              setState(() {
+                _currentUrl = change.url!;
+              });
+            }
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.url));
+  }
+
+  @override
+  void dispose() {
+    // We no longer save on dispose
+    super.dispose();
+  }
+
+  Future<void> _saveLastUrl() async {
+    // Update book with current URL
+    widget.book.linkURL = _currentUrl;
+    widget.book.lastRead = DateTime.now();
+    await widget.book.save();
+
+    // Update in Firestore if available
+    if (widget.book.id != null && FirebaseAuth.instance.currentUser != null) {
+      FirebaseFirestore.instance.collection("books").doc(widget.book.id).update({
+        "linkURL": _currentUrl,
+        "lastRead": DateTime.now().toIso8601String(),
+      }).catchError((error) {
+        print("Error updating URL in Firestore: $error");
+      });
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Reading progress saved'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('Currently Reading'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.save),
+            tooltip: 'Save progress',
+            onPressed: _saveLastUrl,
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () => _webViewController.reload(),
+          ),
+        ],
       ),
-      body: WebViewWidget(
-        controller: WebViewController()
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..loadRequest(Uri.parse(url)),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _webViewController),
+          if (_isLoading)
+            Center(
+              child: CircularProgressIndicator(),
+            ),
+        ],
       ),
     );
   }

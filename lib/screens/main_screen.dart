@@ -32,25 +32,27 @@ class _MainScreenState extends State<MainScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Recently Read'),
-          content: SingleChildScrollView(
+          title: const Text('Recently Visited'),
+          content: const SingleChildScrollView(
             child: ListBody(
               children: <Widget>[
-                Text('This page shows your recently read.'),
+                Text('Here you\'ll find a record of your recently viewed items.'),
+                SizedBox(height: 12),
+                Text('If a link is associated with an item, tapping "Continue" will open it and mark your reading progress.'),
                 SizedBox(height: 8),
-                Text('If you set a link for your books and mangas, clicking "Continue" will open it for you and update your last read time.'),
-                SizedBox(height: 8),
-                Text('If no link is set, clicking "Continue" will just update your last read time.'),
+                Text('Otherwise, "Continue" will simply update your last read time.'),
+                SizedBox(height: 12),
+                Text('For an optimal experience, consider using ad-free links.'),
+                SizedBox(height: 12),
+                Text('To preserve your current URL, tap the save icon in the top right. We recommend saving frequently!'),
                 // Add more info here as needed for the Home Screen
               ],
             ),
           ),
           actions: <Widget>[
             TextButton(
-              child: Text('Close'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
             ),
           ],
         );
