@@ -140,6 +140,27 @@ class _AccountScreenState extends State<AccountScreen> {
     return {};
   }
 
+  Future<String?> _searchMangaDex(String title) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.mangadex.org/manga?title=$title&limit=1'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['data'] != null && data['data'].isNotEmpty) {
+          // Assuming the first result contains the ID
+          String mangaId = data['data'][0]['id'];
+          return 'https://mangadex.org/title/$mangaId';
+        }
+      } else {
+        print('MangaDex API error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error searching MangaDex: $e');
+    }
+    return null;
+  }
+
   Future<void> _importBooks(String bookList) async {
     if (currentUser == null) {
       _showErrorSnackbar('Please log in to import books.');
@@ -177,6 +198,7 @@ class _AccountScreenState extends State<AccountScreen> {
           String apiTitle = searchResult['title'] ?? title;
           String imageUrl = "https://placehold.co/600x400/png/?text=Manual\\nEntry&font=Oswald";
           String type = "Novel";
+          String? mangaDexLink = await _searchMangaDex(title); // Search MangaDex
 
           if (searchResult.isNotEmpty && searchResult['images']?['jpg']?['image_url'] != null) {
             imageUrl = searchResult['images']['jpg']['image_url'];
@@ -193,7 +215,7 @@ class _AccountScreenState extends State<AccountScreen> {
             "chapter": chapter,
             "type": type,
             "imageUrl": imageUrl,
-            "linkURL": "",
+            "linkURL": mangaDexLink ?? "",
             "lastRead": now.toIso8601String(),
           });
 
@@ -202,7 +224,7 @@ class _AccountScreenState extends State<AccountScreen> {
             type: type,
             chapter: chapter,
             imageUrl: imageUrl,
-            linkURL: "",
+            linkURL: mangaDexLink ?? "",
             uid: currentUser!.uid,
             lastRead: now,
             id: docRef.id,
