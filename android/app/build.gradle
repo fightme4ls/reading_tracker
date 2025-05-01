@@ -3,15 +3,15 @@ import java.io.FileInputStream
 
 plugins {
     id "com.android.application"
-    id 'com.google.gms.google-services' // FlutterFire Configuration
+    id 'com.google.gms.google-services'
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
-def keystoreProperties = new Properties() // Corrected this line
+def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile)) // Corrected this line
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -20,12 +20,12 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11 // Update to Java 11 or higher
-        targetCompatibility JavaVersion.VERSION_11 // Update to Java 11 or higher
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = "11" // Ensure Kotlin also targets Java 11
+        jvmTarget = "11"
     }
 
     defaultConfig {
@@ -33,15 +33,15 @@ android {
         minSdk = flutter.minSdkVersion
         minSdkVersion 23
         targetSdk = flutter.targetSdkVersion
-        versionCode = 9
-        versionName = "1.0.8"
+        versionCode = 10
+        versionName = "1.0.9"
     }
 
     signingConfigs {
         create("release") {
             keyAlias = keystoreProperties["keyAlias"] as String
             keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null // Groovy-compatible null check
+            storeFile = keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null
             storePassword = keystoreProperties["storePassword"] as String
         }
     }

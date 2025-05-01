@@ -4,40 +4,78 @@ import '../models/book.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/book_sync_service.dart';
 
 class LibraryScreen extends StatefulWidget {
   @override
   _LibraryScreenState createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
-  // Book data & state
+class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserver {
   late Box<Book> bookBox;
   String _sortOption = 'Title';
   TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isLoading = false;
 
-  // View mode state
-  bool _isCardView = false; // true for card view, false for list view
+  bool _isCardView = false;
   static const String _viewPreferenceKey = 'library_view_preference';
 
-  // Selection mode state
   bool _isEditingMode = false;
   Set<Book> _selectedBooks = Set<Book>();
+
+  final BookSyncService _syncService = BookSyncService();
 
   @override
   void initState() {
     super.initState();
     bookBox = Hive.box<Book>('books');
     _loadViewPreference();
-    _fetchBooksFromFirestore();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshBooks();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshBooks();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshBooks();
+    }
   }
 
   Future<void> _loadViewPreference() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _isCardView = prefs.getBool(_viewPreferenceKey) ?? true; // Default to card view
+      _isCardView = prefs.getBool(_viewPreferenceKey) ?? true;
     });
+  }
+
+  Future<void> _refreshBooks() async {
+    if (FirebaseAuth.instance.currentUser == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    await _syncService.syncBooksFromFirestore();
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -102,7 +140,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           _isCardView = !_isCardView;
         });
 
-        // Save the preference
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(_viewPreferenceKey, _isCardView);
       },
@@ -142,7 +179,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       children: [
         if (!_isEditingMode) _buildSearchBar(),
         Expanded(
-          child: ValueListenableBuilder(
+          child: _isLoading
+              ? Center(child: CircularProgressIndicator())
+              : ValueListenableBuilder(
             valueListenable: bookBox.listenable(),
             builder: (context, Box<Book> box, _) {
               return _isCardView ? _buildBookGrid(box) : _buildBookList(box);
@@ -204,20 +243,26 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return _buildEmptyState();
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: GridView.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12.0,
-          mainAxisSpacing: 16.0,
-          childAspectRatio: 0.65,
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _refreshBooks();
+        _showSyncSnackbar("Synced to cloud");
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: GridView.builder(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12.0,
+            mainAxisSpacing: 16.0,
+            childAspectRatio: 0.65,
+          ),
+          itemCount: books.length,
+          itemBuilder: (context, index) {
+            final book = books[index];
+            return _buildBookCard(book);
+          },
         ),
-        itemCount: books.length,
-        itemBuilder: (context, index) {
-          final book = books[index];
-          return _buildBookCard(book);
-        },
       ),
     );
   }
@@ -229,14 +274,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
       return _buildEmptyState();
     }
 
-    return ListView.separated(
-      padding: EdgeInsets.symmetric(vertical: 8.0),
-      itemCount: books.length,
-      separatorBuilder: (context, index) => Divider(height: 1),
-      itemBuilder: (context, index) {
-        final book = books[index];
-        return _buildBookListItem(book);
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _refreshBooks();
+        _showSyncSnackbar("Synced to cloud");
       },
+      child: ListView.separated(
+        padding: EdgeInsets.symmetric(vertical: 8.0),
+        itemCount: books.length,
+        separatorBuilder: (context, index) => Divider(height: 1),
+        itemBuilder: (context, index) {
+          final book = books[index];
+          return _buildBookListItem(book);
+        },
+      ),
     );
   }
 
@@ -504,94 +555,95 @@ class _LibraryScreenState extends State<LibraryScreen> {
     TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
     TextEditingController linkController = TextEditingController(text: book.linkURL ?? '');
     TextEditingController imgController = TextEditingController(text: book.imageUrl ?? '');
-    String selectedType = book.type;
+    String _selectedType = book.type;
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Edit Book'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: InputDecoration(
-                    labelText: 'Title',
-                    prefixIcon: Icon(Icons.title),
-                  ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text('Edit Book'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: InputDecoration(
+                        labelText: 'Title',
+                        prefixIcon: Icon(Icons.title),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: chapterController,
+                      decoration: InputDecoration(
+                        labelText: 'Chapter',
+                        prefixIcon: Icon(Icons.bookmark),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: linkController,
+                      decoration: InputDecoration(
+                        labelText: 'Link (optional)',
+                        prefixIcon: Icon(Icons.link),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: imgController,
+                      decoration: InputDecoration(
+                        labelText: 'Image Link (optional)',
+                        prefixIcon: Icon(Icons.image),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    DropdownButton<String>(
+                      value: _selectedType,
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedType = newValue!;
+                        });
+                      },
+                      items: <String>['Novel', 'Manga', 'Manhwa', 'Light Novel']
+                          .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: chapterController,
-                  decoration: InputDecoration(
-                    labelText: 'Chapter',
-                    prefixIcon: Icon(Icons.bookmark),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: linkController,
-                  decoration: InputDecoration(
-                    labelText: 'Link (optional)',
-                    prefixIcon: Icon(Icons.link),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: imgController,
-                  decoration: InputDecoration(
-                    labelText: 'Image Link (optional)',
-                    prefixIcon: Icon(Icons.image),
-                  ),
-                ),
-                SizedBox(height: 16),
-                DropdownButton<String>(
-                  value: selectedType,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedType = newValue!;
-                    });
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
                   },
-                  items: <String>['Novel', 'Manga', 'Manhwa', 'Light Novel']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
+                  child: Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    book.title = titleController.text;
+                    book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
+                    book.linkURL = linkController.text;
+                    book.imageUrl = imgController.text;
+                    book.type = _selectedType;
+
+                    await book.save();
+                    _updateBookInFirestore(book);
+
+                    Navigator.pop(context);
+                  },
+                  child: Text('Save'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                book.title = titleController.text;
-                book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
-                book.linkURL = linkController.text;
-                book.imageUrl = imgController.text;
-                book.type = selectedType;
-
-                // Preserve the lastRead time
-                // This ensures we don't lose the timestamp when editing
-
-                await book.save();
-                _updateBookInFirestore(book);
-
-                Navigator.pop(context);
-              },
-              child: Text('Save'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -609,11 +661,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
       "linkURL": book.linkURL ?? '',
       "imageUrl": book.imageUrl ?? '',
       "type": book.type,
-      // Always include lastRead when updating to Firestore
       "lastRead": book.lastRead?.toIso8601String() ?? DateTime.now().toIso8601String(),
     })
         .then((_) {
       print("Book updated in Firestore.");
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Book updated successfully.'))
+      );
     })
         .catchError((error) {
       print("Failed to update book in Firestore: $error");
@@ -671,81 +725,82 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  void _fetchBooksFromFirestore() async {
-    User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final userId = user.uid;
-
-    try {
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('books')
-          .where('uid', isEqualTo: userId)
-          .get();
-
-      // Don't clear the box as it could erase local books
-      // Instead, update existing books or add new ones
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-
-        // Parse the lastRead timestamp from Firestore
-        DateTime? lastRead;
-        if (data['lastRead'] != null) {
-          try {
-            lastRead = DateTime.parse(data['lastRead']);
-          } catch (e) {
-            print("Error parsing lastRead date: $e");
-          }
-        }
-
-        // Check if book already exists in Hive
-        final existingBookIndex = bookBox.values.toList().indexWhere((b) => b.id == doc.id);
-
-        if (existingBookIndex != -1) {
-          // Book exists, update it
-          final existingBook = bookBox.getAt(existingBookIndex)!;
-          existingBook.title = data['title'] ?? existingBook.title;
-          existingBook.type = data['type'] ?? existingBook.type;
-          existingBook.chapter = data['chapter'] ?? existingBook.chapter;
-          existingBook.imageUrl = data['imageUrl'] ?? existingBook.imageUrl;
-          existingBook.linkURL = data['linkURL'] ?? existingBook.linkURL;
-          // Only update lastRead if the new value is more recent or existing is null
-          if (lastRead != null && (existingBook.lastRead == null ||
-              lastRead.isAfter(existingBook.lastRead!))) {
-            existingBook.lastRead = lastRead;
-          }
-
-          await existingBook.save();
-        } else {
-          // Book doesn't exist, add it
-          final book = Book(
-            id: doc.id,
-            title: data['title'] ?? 'Untitled',
-            type: data['type'] ?? 'Novel',
-            chapter: data['chapter'] ?? 1,
-            imageUrl: data['imageUrl'],
-            linkURL: data['linkURL'],
-            uid: data['uid'],
-            lastRead: lastRead,
-          );
-
-          await bookBox.add(book);
-        }
-      }
-
-      setState(() {});
-    } catch (e) {
-      print("Error fetching books: $e");
-      _showErrorSnackbar("Failed to load books from cloud.");
-    }
-  }
+  // void _fetchBooksFromFirestore() async {
+  //   User? user = FirebaseAuth.instance.currentUser;
+  //   if (user == null) return;
+  //
+  //   final userId = user.uid;
+  //
+  //   try {
+  //     final QuerySnapshot snapshot = await FirebaseFirestore.instance
+  //         .collection('books')
+  //         .where('uid', isEqualTo: userId)
+  //         .get();
+  //
+  //     for (var doc in snapshot.docs) {
+  //       final data = doc.data() as Map<String, dynamic>;
+  //
+  //       DateTime? lastRead;
+  //       if (data['lastRead'] != null) {
+  //         try {
+  //           lastRead = DateTime.parse(data['lastRead']);
+  //         } catch (e) {
+  //           print("Error parsing lastRead date: $e");
+  //         }
+  //       }
+  //
+  //       final existingBookIndex = bookBox.values.toList().indexWhere((b) => b.id == doc.id);
+  //
+  //       if (existingBookIndex != -1) {
+  //         final existingBook = bookBox.getAt(existingBookIndex)!;
+  //         existingBook.title = data['title'] ?? existingBook.title;
+  //         existingBook.type = data['type'] ?? existingBook.type;
+  //         existingBook.chapter = data['chapter'] ?? existingBook.chapter;
+  //         existingBook.imageUrl = data['imageUrl'] ?? existingBook.imageUrl;
+  //         existingBook.linkURL = data['linkURL'] ?? existingBook.linkURL;
+  //         if (lastRead != null && (existingBook.lastRead == null ||
+  //             lastRead.isAfter(existingBook.lastRead!))) {
+  //           existingBook.lastRead = lastRead;
+  //         }
+  //
+  //         await existingBook.save();
+  //       } else {
+  //         final book = Book(
+  //           id: doc.id,
+  //           title: data['title'] ?? 'Untitled',
+  //           type: data['type'] ?? 'Novel',
+  //           chapter: data['chapter'] ?? 1,
+  //           imageUrl: data['imageUrl'],
+  //           linkURL: data['linkURL'],
+  //           uid: data['uid'],
+  //           lastRead: lastRead,
+  //         );
+  //
+  //         await bookBox.add(book);
+  //       }
+  //     }
+  //
+  //     setState(() {});
+  //   } catch (e) {
+  //     print("Error fetching books: $e");
+  //     _showErrorSnackbar("Failed to load books from cloud.");
+  //   }
+  // }
 
   void _showErrorSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSyncSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: 1),
       ),
     );
   }

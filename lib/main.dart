@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/main_screen.dart';
-import 'screens/login_page.dart'; // Import LoginPage
+import 'screens/login_page.dart';
 import 'models/book.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 
-// Function to update existing books with a lastRead timestamp
 Future<void> updateExistingBooks() async {
   final bookBox = Hive.box<Book>('books');
   final now = DateTime.now();
@@ -19,7 +18,6 @@ Future<void> updateExistingBooks() async {
       book.lastRead = now;
       await book.save();
 
-      // Also update in Firestore if needed
       if (book.id != null) {
         FirebaseFirestore.instance.collection("books").doc(book.id).update({
           "lastRead": book.lastRead!.toIso8601String(),
@@ -38,9 +36,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await Hive.initFlutter();
-  Hive.registerAdapter(BookAdapter()); // register  model adapter
-  await Hive.openBox<Book>('books'); // open books
-  // Call the updateExistingBooks function after opening the Hive box
+  Hive.registerAdapter(BookAdapter());
+  await Hive.openBox<Book>('books');
   await updateExistingBooks();
   runApp(MyApp());
 }
@@ -51,7 +48,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Reading Tracker',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: _getInitialScreen(), // Use a helper function to determine the initial screen
+      home: _getInitialScreen(),
     );
   }
 }
@@ -59,10 +56,8 @@ class MyApp extends StatelessWidget {
 Widget _getInitialScreen() {
   final auth = FirebaseAuth.instance;
   if (auth.currentUser != null) {
-    // User is logged in
     return MainScreen();
   } else {
-    // User is not logged in
     return LoginPage();
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'main_screen.dart'; // Import MainScreen
-import 'signup_page.dart'; // Import SignUpPage
+import 'main_screen.dart';
+import 'signup_page.dart';
 import 'forgotpassword_page.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -19,23 +19,21 @@ class _LoginPageState extends State<LoginPage> {
   String? _infoMessage2;
   bool _isPasswordVisible = false;
 
-  // Regex to check email format
   bool _isEmailValid(String email) {
     final emailRegex = RegExp(
         r'^[a-zA-Z0-9]+([._%+-])*[a-zA-Z0-9]*@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$');
     return emailRegex.hasMatch(email);
   }
 
-  // Check if email is verified and return a bool
   Future<bool> _checkEmailVerification(User user) async {
-    await user.reload(); // Reload user data to get the most updated information
-    return user.emailVerified; // Return if email is verified
+    await user.reload();
+    return user.emailVerified;
   }
 
   Future<void> _signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return; // User canceled the sign-in
+      if (googleUser == null) return;
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
@@ -148,7 +146,6 @@ class _LoginPageState extends State<LoginPage> {
                   String email = emailController.text;
                   String password = passwordController.text;
 
-                  // Check if the email format is valid
                   if (!_isEmailValid(email)) {
                     setState(() {
                       _errorMessage = 'Please enter a valid email address.';
@@ -157,7 +154,6 @@ class _LoginPageState extends State<LoginPage> {
                   }
 
                   try {
-                    // Attempt to sign in the user with email and password
                     UserCredential userCredential =
                     await FirebaseAuth.instance.signInWithEmailAndPassword(
                       email: email,
@@ -166,16 +162,13 @@ class _LoginPageState extends State<LoginPage> {
 
                     User? user = userCredential.user;
                     if (user != null) {
-                      // Check if the email is verified
                       bool isVerified = await _checkEmailVerification(user);
                       if (isVerified) {
-                        // If email is verified, navigate to the main screen
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (context) => MainScreen()),
                         );
                       } else {
-                        // If email is not verified, show info message and log out
                         await user.sendEmailVerification();
                         setState(() {
                           _infoMessage = 'Please verify your email address before logging in.';

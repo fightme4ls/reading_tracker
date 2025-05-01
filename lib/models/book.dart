@@ -8,22 +8,22 @@ class Book extends HiveObject {
   String title;
 
   @HiveField(1)
-  String type; // Novel, Manga, Manhwa, etc.
+  String type; // Novel, Manga, Manhwa, Light Novel
 
   @HiveField(2)
   int chapter;
 
   @HiveField(3)
-  String? imageUrl; // Store the image URL
+  String? imageUrl; // Image URL
 
   @HiveField(4)
   String? linkURL;
 
   @HiveField(5)
-  String? id; // Firestore Document ID (for syncing with Firestore)
+  String? id; // Firestore Doc ID
 
   @HiveField(6)
-  String? uid; // UID of the user who added the book (for linking to specific user)
+  String? uid; // UID of user who added the book
 
   @HiveField(7)
   DateTime? lastRead; // Timestamp of when the book was last read

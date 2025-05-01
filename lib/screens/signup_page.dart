@@ -17,7 +17,6 @@ class _SignUpPageState extends State<SignUpPage> {
   String? _errorMessage;
   String? _infoMessage;
 
-  // Regex to check email format
   bool _isEmailValid(String email) {
     final emailRegex = RegExp(
         r'^[a-zA-Z0-9]+([._%+-])*[a-zA-Z0-9]*@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$');

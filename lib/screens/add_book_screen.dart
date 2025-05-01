@@ -398,7 +398,6 @@ class _AddBookScreenState extends State<AddBookScreen> {
       final imageUrl = selectedImage ?? _placeholderImage;
       final linkURL = linkUrlController.text.trim();
 
-      // Create current timestamp for lastRead
       final now = DateTime.now();
 
       final book = Book(

@@ -32,7 +32,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Display error message if there's any
               if (_errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -42,7 +41,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     textAlign: TextAlign.center,
                   ),
                 ),
-              // Display info message if there's any
               if (_infoMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -53,7 +51,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                   ),
                 ),
               SizedBox(height: 20),
-              // Email input field
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -67,7 +64,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 ),
               ),
               SizedBox(height: 24),
-              // Reset Password button
               ElevatedButton(
                 onPressed: () async {
                   String email = emailController.text.trim();
@@ -79,7 +75,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     return;
                   }
 
-                  // Send password reset email using Firebase Authentication
                   try {
                     await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
                     setState(() {
@@ -108,7 +103,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               SizedBox(height: 16),
               TextButton(
                 onPressed: () {
-                  // Navigate back to the Login screen
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (context) => LoginPage()),

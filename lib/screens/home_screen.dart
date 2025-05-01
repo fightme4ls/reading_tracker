@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../services/book_sync_service.dart';
 import 'dart:async';
 
 class HomeScreen extends StatefulWidget {
@@ -13,16 +14,37 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late Box<Book> bookBox;
   bool isLoading = true;
   User? _currentUser;
+  final BookSyncService _syncService = BookSyncService();
 
   @override
   void initState() {
     super.initState();
     bookBox = Hive.box<Book>('books');
+    WidgetsBinding.instance.addObserver(this);
     _loadCurrentUser();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshBooks();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshBooks();
+    }
   }
 
   Future<void> _loadCurrentUser() async {
@@ -30,10 +52,32 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         setState(() {
           _currentUser = user;
-          isLoading = false;
         });
+
+        _refreshBooks();
       }
     });
+  }
+
+  Future<void> _refreshBooks() async {
+    if (_currentUser == null) {
+      setState(() {
+        isLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    await _syncService.syncBooksFromFirestore();
+
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   Future<void> _continueReading(BuildContext context, Book book) async {
@@ -51,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (book.linkURL != null && book.linkURL!.isNotEmpty) {
-      // Wait for navigation to complete and then refresh the UI when popped
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -59,11 +102,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
 
-      // Refresh state after coming back from WebView
       if (mounted) {
-        setState(() {
-          // This will refresh the UI with potentially updated book data
-        });
+        _refreshBooks();
       }
     } else {
       _showSnackbar('No link available for this book.');
@@ -74,96 +114,109 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _showSyncSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
   void _showEditDialog(Book book) {
     TextEditingController titleController = TextEditingController(text: book.title);
     TextEditingController chapterController = TextEditingController(text: book.chapter.toString());
     TextEditingController linkController = TextEditingController(text: book.linkURL ?? '');
     TextEditingController imgController = TextEditingController(text: book.imageUrl ?? '');
-    String selectedType = book.type;
+    String _selectedType = book.type;
 
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Edit Book'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: InputDecoration(
-                    labelText: 'Title',
-                    prefixIcon: Icon(Icons.title),
-                  ),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AlertDialog(
+              title: Text('Edit Book'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: InputDecoration(
+                        labelText: 'Title',
+                        prefixIcon: Icon(Icons.title),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: chapterController,
+                      decoration: InputDecoration(
+                        labelText: 'Chapter',
+                        prefixIcon: Icon(Icons.bookmark),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: linkController,
+                      decoration: InputDecoration(
+                        labelText: 'Link (optional)',
+                        prefixIcon: Icon(Icons.link),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: imgController,
+                      decoration: InputDecoration(
+                        labelText: 'Image Link (optional)',
+                        prefixIcon: Icon(Icons.image),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    DropdownButton<String>(
+                      value: _selectedType,
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedType = newValue!;
+                        });
+                      },
+                      items: <String>['Novel', 'Manga', 'Manhwa', 'Light Novel']
+                          .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: chapterController,
-                  decoration: InputDecoration(
-                    labelText: 'Chapter',
-                    prefixIcon: Icon(Icons.bookmark),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: linkController,
-                  decoration: InputDecoration(
-                    labelText: 'Link (optional)',
-                    prefixIcon: Icon(Icons.link),
-                  ),
-                ),
-                SizedBox(height: 16),
-                TextField(
-                  controller: imgController,
-                  decoration: InputDecoration(
-                    labelText: 'Image Link (optional)',
-                    prefixIcon: Icon(Icons.image),
-                  ),
-                ),
-                SizedBox(height: 16),
-                DropdownButton<String>(
-                  value: selectedType,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedType = newValue!;
-                    });
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
                   },
-                  items: <String>['Novel', 'Manga', 'Manhwa', 'Light Novel']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
+                  child: Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    book.title = titleController.text;
+                    book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
+                    book.linkURL = linkController.text;
+                    book.imageUrl = imgController.text;
+                    book.type = _selectedType;
+
+                    await book.save();
+                    _updateBookInFirestore(book);
+
+                    Navigator.pop(context);
+                  },
+                  child: Text('Save'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                book.title = titleController.text;
-                book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
-                book.linkURL = linkController.text;
-                book.imageUrl = imgController.text;
-                book.type = selectedType;
-
-                await book.save();
-                _updateBookInFirestore(book);
-
-                Navigator.pop(context);
-              },
-              child: Text('Save'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -289,13 +342,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentBooksList(List<Book> books) {
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: books.length,
-      itemBuilder: (context, index) {
-        final book = books[index];
-        return _buildBookCard(book);
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _refreshBooks();
+        _showSyncSnackbar("Synced to cloud");
       },
+      child: ListView.builder(
+        padding: EdgeInsets.all(16),
+        itemCount: books.length,
+        itemBuilder: (context, index) {
+          final book = books[index];
+          return _buildBookCard(book);
+        },
+      ),
     );
   }
 
@@ -326,7 +385,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => _showEditDialog(book), // Call edit dialog on tap
+        onTap: () => _showEditDialog(book),
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Row(
@@ -434,7 +493,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
 }
 
-//WebViewScreen
 class WebViewScreen extends StatefulWidget {
   final String url;
   final Book book;
@@ -488,17 +546,14 @@ class _WebViewScreenState extends State<WebViewScreen> {
 
   @override
   void dispose() {
-    // We no longer save on dispose
     super.dispose();
   }
 
   Future<void> _saveLastUrl() async {
-    // Update book with current URL
     widget.book.linkURL = _currentUrl;
     widget.book.lastRead = DateTime.now();
     await widget.book.save();
 
-    // Update in Firestore if available
     if (widget.book.id != null && FirebaseAuth.instance.currentUser != null) {
       FirebaseFirestore.instance.collection("books").doc(widget.book.id).update({
         "linkURL": _currentUrl,

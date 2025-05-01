@@ -45,7 +45,6 @@ class _MainScreenState extends State<MainScreen> {
                 Text('For an optimal experience, consider using ad-free links.'),
                 SizedBox(height: 12),
                 Text('To preserve your current URL, tap the save icon in the top right. We recommend saving frequently!'),
-                // Add more info here as needed for the Home Screen
               ],
             ),
           ),
@@ -60,14 +59,12 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // Switch to Library tab when a book is added
   void _onBookAdded() {
     setState(() {
-      _selectedIndex = 1; // Switch to Library screen
+      _selectedIndex = 1;
     });
   }
 
-  // Handle bottom navigation tab changes
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;

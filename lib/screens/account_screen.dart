@@ -148,7 +148,6 @@ class _AccountScreenState extends State<AccountScreen> {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['data'] != null && data['data'].isNotEmpty) {
-          // Assuming the first result contains the ID
           String mangaId = data['data'][0]['id'];
           return 'https://mangadex.org/title/$mangaId';
         }
@@ -198,7 +197,7 @@ class _AccountScreenState extends State<AccountScreen> {
           String apiTitle = searchResult['title'] ?? title;
           String imageUrl = "https://placehold.co/600x400/png/?text=Manual\\nEntry&font=Oswald";
           String type = "Novel";
-          String? mangaDexLink = await _searchMangaDex(title); // Search MangaDex
+          String? mangaDexLink = await _searchMangaDex(title);
 
           if (searchResult.isNotEmpty && searchResult['images']?['jpg']?['image_url'] != null) {
             imageUrl = searchResult['images']['jpg']['image_url'];
@@ -311,7 +310,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (context) => LoginPage()),
-                        (Route<dynamic> route) => false, // Remove all previous routes
+                        (Route<dynamic> route) => false,
                   );
                 });
               },

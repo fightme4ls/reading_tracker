@@ -5,7 +5,7 @@ class MangaPicture {
 
   factory MangaPicture.fromJson(Map<String, dynamic> json) {
     return MangaPicture(
-      imageUrl: json['jpg']['image_url'] ?? '', // Use JPG image URL
+      imageUrl: json['jpg']['image_url'] ?? '',
     );
   }
 }
