@@ -140,25 +140,25 @@ class _AccountScreenState extends State<AccountScreen> {
     return {};
   }
 
-  Future<String?> _searchMangaDex(String title) async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://api.mangadex.org/manga?title=$title&limit=1'),
-      );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['data'] != null && data['data'].isNotEmpty) {
-          String mangaId = data['data'][0]['id'];
-          return 'https://mangadex.org/title/$mangaId';
-        }
-      } else {
-        print('MangaDex API error: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error searching MangaDex: $e');
-    }
-    return null;
-  }
+  // Future<String?> _searchMangaDex(String title) async {
+  //   try {
+  //     final response = await http.get(
+  //       Uri.parse('https://api.mangadex.org/manga?title=$title&limit=1'),
+  //     );
+  //     if (response.statusCode == 200) {
+  //       final data = json.decode(response.body);
+  //       if (data['data'] != null && data['data'].isNotEmpty) {
+  //         String mangaId = data['data'][0]['id'];
+  //         return 'https://mangadex.org/title/$mangaId';
+  //       }
+  //     } else {
+  //       print('MangaDex API error: ${response.statusCode}');
+  //     }
+  //   } catch (e) {
+  //     print('Error searching MangaDex: $e');
+  //   }
+  //   return null;
+  // }
 
   Future<void> _importBooks(String bookList) async {
     if (currentUser == null) {
@@ -197,7 +197,8 @@ class _AccountScreenState extends State<AccountScreen> {
           String apiTitle = searchResult['title'] ?? title;
           String imageUrl = "https://placehold.co/600x400/png/?text=Manual\\nEntry&font=Oswald";
           String type = "Novel";
-          String? mangaDexLink = await _searchMangaDex(title);
+          //String? mangaDexLink = await _searchMangaDex(title);
+          const String mangaDexLink = ""; // Set a default empty string
 
           if (searchResult.isNotEmpty && searchResult['images']?['jpg']?['image_url'] != null) {
             imageUrl = searchResult['images']['jpg']['image_url'];
