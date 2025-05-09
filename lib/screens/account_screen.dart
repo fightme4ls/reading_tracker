@@ -6,6 +6,8 @@ import '../models/book.dart';
 import 'login_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:provider/provider.dart';
+import '../services/theme_provider.dart';
 
 class AccountScreen extends StatefulWidget {
   @override
@@ -19,7 +21,6 @@ class _AccountScreenState extends State<AccountScreen> {
   @override
   void initState() {
     super.initState();
-
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (mounted) {
         setState(() {
@@ -198,7 +199,7 @@ class _AccountScreenState extends State<AccountScreen> {
           String imageUrl = "https://placehold.co/600x400/png/?text=Manual\\nEntry&font=Oswald";
           String type = "Novel";
           //String? mangaDexLink = await _searchMangaDex(title);
-          const String mangaDexLink = ""; // Set a default empty string
+          const String mangaDexLink = "";
 
           if (searchResult.isNotEmpty && searchResult['images']?['jpg']?['image_url'] != null) {
             imageUrl = searchResult['images']['jpg']['image_url'];
@@ -291,6 +292,18 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
+  Widget _buildThemeToggle() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    return SwitchListTile(
+      title: Text('Dark Mode'),
+      value: themeProvider.themeMode == ThemeMode.dark,
+      onChanged: (bool value) {
+        themeProvider.toggleTheme();
+      },
+      secondary: Icon(themeProvider.themeMode == ThemeMode.dark ? Icons.brightness_2 : Icons.brightness_high),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -327,6 +340,8 @@ class _AccountScreenState extends State<AccountScreen> {
             children: [
               SizedBox(height: 30),
               if (currentUser != null) ...[
+                _buildThemeToggle(),
+                SizedBox(height: 16),
                 _buildUserInfoButton(),
                 SizedBox(height: 16),
                 _buildListBooksButton(),

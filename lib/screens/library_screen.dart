@@ -199,15 +199,17 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
         controller: _searchController,
         decoration: InputDecoration(
           hintText: 'Search for a book...',
-          prefixIcon: Icon(Icons.search),
+          hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6)),
+          prefixIcon: Icon(Icons.search, color: Theme.of(context).iconTheme.color),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
           ),
           filled: true,
-          fillColor: Colors.grey.shade200,
+          fillColor: Theme.of(context).cardColor,
           contentPadding: EdgeInsets.symmetric(vertical: 0),
         ),
+        style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
         onChanged: (query) {
           setState(() {
             _searchQuery = query;
@@ -347,6 +349,7 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
               ? BorderSide(color: Theme.of(context).primaryColor, width: 2)
               : BorderSide.none,
         ),
+        color: Theme.of(context).cardColor,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -363,13 +366,13 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           color: Colors.grey.shade300,
-                          child: Icon(Icons.broken_image, size: 50),
+                          child: Icon(Icons.broken_image, size: 50, color: Theme.of(context).iconTheme.color),
                         );
                       },
                     )
                         : Container(
                       color: Colors.grey.shade300,
-                      child: Icon(Icons.book, size: 50),
+                      child: Icon(Icons.book, size: 50, color: Theme.of(context).iconTheme.color),
                     ),
                   ),
                   if (isSelected)
@@ -379,7 +382,7 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
                       child: Container(
                         padding: EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).scaffoldBackgroundColor,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -395,7 +398,7 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
             Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
               ),
               child: Column(
@@ -403,18 +406,18 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
                 children: [
                   Text(
                     book.title,
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
                   SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.bookmark_border, size: 16, color: Colors.grey),
+                      Icon(Icons.bookmark_border, size: 16, color: Theme.of(context).iconTheme.color),
                       SizedBox(width: 4),
                       Text(
                         'Ch. ${book.chapter}',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                        style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 12),
                       ),
                       Spacer(),
                       Container(
@@ -469,7 +472,7 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
           });
         }
       },
-      tileColor: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : null,
+      tileColor: isSelected ? Theme.of(context).primaryColor.withOpacity(0.1) : Theme.of(context).cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: isSelected
@@ -496,13 +499,13 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
       ),
       title: Text(
         book.title,
-        style: TextStyle(fontWeight: FontWeight.w500),
+        style: TextStyle(fontWeight: FontWeight.w500, color: Theme.of(context).textTheme.bodyLarge?.color),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         book.type,
-        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+        style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color),
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -518,7 +521,7 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
               ),
             ),
           ),

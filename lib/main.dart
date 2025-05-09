@@ -10,6 +10,9 @@ import 'firebase_options.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'services/theme_provider.dart';
 
 Future<void> updateExistingBooks() async {
   final bookBox = Hive.box<Book>('books');
@@ -53,12 +56,22 @@ Future<String?> _getLatestAppVersionFromRemoteConfig() async {
   }
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   @override
-  _MyAppState createState() => _MyAppState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: _MyAppContent(),
+    );
+  }
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppContent extends StatefulWidget {
+  @override
+  _MyAppContentState createState() => _MyAppContentState();
+}
+
+class _MyAppContentState extends State<_MyAppContent> {
   bool _updateAvailable = false;
   bool _checkingForUpdate = true;
 
@@ -142,6 +155,8 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     if (_checkingForUpdate) {
       return const MaterialApp(
         home: Scaffold(
@@ -154,6 +169,9 @@ class _MyAppState extends State<MyApp> {
 
     if (_updateAvailable) {
       return MaterialApp(
+        theme: ThemeData(),
+        darkTheme: ThemeData.dark(),
+        themeMode: themeProvider.themeMode,
         home: Scaffold(
           body: Center(
             child: Card(
@@ -220,6 +238,8 @@ class _MyAppState extends State<MyApp> {
       return MaterialApp(
         title: 'Reading Tracker',
         theme: ThemeData(primarySwatch: Colors.blue),
+        darkTheme: ThemeData.dark(),
+        themeMode: themeProvider.themeMode,
         home: InitialScreen(),
       );
     }

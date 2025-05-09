@@ -115,7 +115,7 @@ class _MainScreenState extends State<MainScreen> {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(),
+            color: Colors.grey.withOpacity(0.3),
             blurRadius: 8,
             offset: Offset(0, -2),
           ),
@@ -141,8 +141,8 @@ class _MainScreenState extends State<MainScreen> {
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Theme.of(context).primaryColor,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: Theme.of(context).colorScheme.primary,
+        unselectedItemColor: Theme.of(context).unselectedWidgetColor,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
       ),
