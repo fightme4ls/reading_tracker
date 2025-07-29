@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/book_sync_service.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 class LibraryScreen extends StatefulWidget {
   @override
@@ -75,6 +76,37 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  // New method to handle reading a book from the library
+  Future<void> _readBook(BuildContext context, Book book) async {
+    final now = DateTime.now();
+    book.lastRead = now;
+    await book.save();
+
+    if (book.id != null && FirebaseAuth.instance.currentUser != null) {
+      FirebaseFirestore.instance.collection("books").doc(book.id).update({
+        "lastRead": now.toIso8601String(),
+      }).catchError((error) {
+        print("Error updating lastRead in Firestore: $error");
+        _showErrorSnackbar('Failed to update read time remotely.');
+      });
+    }
+
+    if (book.linkURL != null && book.linkURL!.isNotEmpty) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WebViewScreen(url: book.linkURL!, book: book),
+        ),
+      );
+
+      if (mounted) {
+        _refreshBooks();
+      }
+    } else {
+      _showErrorSnackbar('No link available for this book.');
     }
   }
 
@@ -629,6 +661,32 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
                   },
                   child: Text('Cancel'),
                 ),
+                // New Read Button
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    // First update the book with any changes
+                    book.title = titleController.text;
+                    book.chapter = int.tryParse(chapterController.text) ?? book.chapter;
+                    book.linkURL = linkController.text;
+                    book.imageUrl = imgController.text;
+                    book.type = _selectedType;
+
+                    await book.save();
+                    _updateBookInFirestore(book);
+
+                    // Close the dialog first
+                    Navigator.pop(context);
+
+                    // Then start reading
+                    await _readBook(context, book);
+                  },
+                  icon: Icon(Icons.play_arrow, size: 16),
+                  label: Text('Read'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
                 ElevatedButton(
                   onPressed: () async {
                     book.title = titleController.text;
@@ -728,68 +786,6 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
     );
   }
 
-  // void _fetchBooksFromFirestore() async {
-  //   User? user = FirebaseAuth.instance.currentUser;
-  //   if (user == null) return;
-  //
-  //   final userId = user.uid;
-  //
-  //   try {
-  //     final QuerySnapshot snapshot = await FirebaseFirestore.instance
-  //         .collection('books')
-  //         .where('uid', isEqualTo: userId)
-  //         .get();
-  //
-  //     for (var doc in snapshot.docs) {
-  //       final data = doc.data() as Map<String, dynamic>;
-  //
-  //       DateTime? lastRead;
-  //       if (data['lastRead'] != null) {
-  //         try {
-  //           lastRead = DateTime.parse(data['lastRead']);
-  //         } catch (e) {
-  //           print("Error parsing lastRead date: $e");
-  //         }
-  //       }
-  //
-  //       final existingBookIndex = bookBox.values.toList().indexWhere((b) => b.id == doc.id);
-  //
-  //       if (existingBookIndex != -1) {
-  //         final existingBook = bookBox.getAt(existingBookIndex)!;
-  //         existingBook.title = data['title'] ?? existingBook.title;
-  //         existingBook.type = data['type'] ?? existingBook.type;
-  //         existingBook.chapter = data['chapter'] ?? existingBook.chapter;
-  //         existingBook.imageUrl = data['imageUrl'] ?? existingBook.imageUrl;
-  //         existingBook.linkURL = data['linkURL'] ?? existingBook.linkURL;
-  //         if (lastRead != null && (existingBook.lastRead == null ||
-  //             lastRead.isAfter(existingBook.lastRead!))) {
-  //           existingBook.lastRead = lastRead;
-  //         }
-  //
-  //         await existingBook.save();
-  //       } else {
-  //         final book = Book(
-  //           id: doc.id,
-  //           title: data['title'] ?? 'Untitled',
-  //           type: data['type'] ?? 'Novel',
-  //           chapter: data['chapter'] ?? 1,
-  //           imageUrl: data['imageUrl'],
-  //           linkURL: data['linkURL'],
-  //           uid: data['uid'],
-  //           lastRead: lastRead,
-  //         );
-  //
-  //         await bookBox.add(book);
-  //       }
-  //     }
-  //
-  //     setState(() {});
-  //   } catch (e) {
-  //     print("Error fetching books: $e");
-  //     _showErrorSnackbar("Failed to load books from cloud.");
-  //   }
-  // }
-
   void _showErrorSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -804,6 +800,118 @@ class _LibraryScreenState extends State<LibraryScreen> with WidgetsBindingObserv
       SnackBar(
         content: Text(message),
         duration: Duration(seconds: 1),
+      ),
+    );
+  }
+}
+
+// WebViewScreen class (same as in your home screen)
+class WebViewScreen extends StatefulWidget {
+  final String url;
+  final Book book;
+
+  WebViewScreen({required this.url, required this.book});
+
+  @override
+  _WebViewScreenState createState() => _WebViewScreenState();
+}
+
+class _WebViewScreenState extends State<WebViewScreen> {
+  late WebViewController _webViewController;
+  String _currentUrl = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUrl = widget.url;
+    _setupWebView();
+  }
+
+  void _setupWebView() {
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+              _currentUrl = url;
+            });
+          },
+          onPageFinished: (String url) {
+            setState(() {
+              _isLoading = false;
+              _currentUrl = url;
+            });
+          },
+          onUrlChange: (UrlChange change) {
+            if (change.url != null) {
+              setState(() {
+                _currentUrl = change.url!;
+              });
+            }
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.url));
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  Future<void> _saveLastUrl() async {
+    widget.book.linkURL = _currentUrl;
+    widget.book.lastRead = DateTime.now();
+    await widget.book.save();
+
+    if (widget.book.id != null && FirebaseAuth.instance.currentUser != null) {
+      FirebaseFirestore.instance.collection("books").doc(widget.book.id).update({
+        "linkURL": _currentUrl,
+        "lastRead": DateTime.now().toIso8601String(),
+      }).catchError((error) {
+        print("Error updating URL in Firestore: $error");
+      });
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Reading progress saved'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Currently Reading'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.save),
+            tooltip: 'Save progress',
+            onPressed: _saveLastUrl,
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: () => _webViewController.reload(),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _webViewController),
+          if (_isLoading)
+            Center(
+              child: CircularProgressIndicator(),
+            ),
+        ],
       ),
     );
   }
